@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Flycode：大家一起来讨论，参与网站的定制。">
+  <title>Flycode · 一起定制一个网站</title>
+  
+  <!-- Open Graph / 分享卡片 -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://flycode.community/">
+  <meta property="og:title" content="Flycode · 一起定制一个网站">
+  <meta property="og:description" content="功能、内容和方向，由我们一起决定。每一轮参与，都会让它更接近它真正要成为的样子。">
+  <meta property="og:site_name" content="Flycode">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Flycode · 一起定制一个网站">
+  <meta name="twitter:description" content="功能、内容和方向，由我们一起决定。">
+  
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23171816'/><text x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='monospace' font-size='18' font-weight='bold' fill='%23d7f34b'>F/</text></svg>">
+  
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Flycode 首页">
+        <span class="brand-mark">F<span>/</span></span>
+        <span>Flycode</span>
+        <span class="brand-state">IN PROGRESS</span>
+      </a>
+      <nav class="main-nav" aria-label="主导航">
+        <a class="nav-link active" href="#overview">项目</a>
+        <a class="nav-link" href="#participate">参与</a>
+        <a class="nav-link" href="#timeline">成长记录</a>
+      </nav>
+      <button class="text-button" id="admin-open" type="button">管理入口 <span aria-hidden="true">↗</span></button>
+    </header>
+
+    <main id="top">
+      <section class="round-bar" aria-label="当前阶段">
+        <div class="round-label"><span class="pulse-dot"></span><span>公开共创项目</span></div>
+        <div class="round-track" aria-hidden="true"><span id="round-track-fill"></span></div>
+        <div class="round-meta"><span id="round-number">ROUND 01</span><span id="round-status">提案收集中</span></div>
+      </section>
+
+      <section class="hero" id="overview">
+        <div class="hero-copy">
+          <p class="eyebrow">一个还没有答案的网站</p>
+          <h1>功能、内容和方向，<br><em>由我们一起决定。</em></h1>
+          <p class="hero-description">Flycode 从一个想法开始。你可以提出想做的功能、想看的内容，或者完全不同的发展方向。每一轮参与，都会让它更接近它真正要成为的样子。</p>
+          <div class="hero-actions">
+            <a class="primary-button" id="join-button" href="#submit-panel">提出你的想法 <span aria-hidden="true">↗</span></a>
+            <a class="quiet-link" href="#timeline">看看它怎样长出来 <span aria-hidden="true">↓</span></a>
+          </div>
+          <div class="hero-footnote"><span class="footnote-line"></span><span>你不需要懂代码，也可以参与第一轮。</span></div>
+        </div>
+        <div class="question-board">
+          <div class="board-topline"><span>NOW DISCUSSING</span><span id="board-phase-id">01 / 01</span></div>
+          <div class="board-rule"></div>
+          <p class="board-label">这一轮的问题</p>
+          <h2 id="current-question">你希望它先做什么？</h2>
+          <p id="current-phase-description">提出一个具体的功能、内容或发展方向，告诉我们为什么它值得优先考虑。</p>
+          <div class="board-footer">
+            <div><span class="mini-label">截止时间</span><strong id="phase-deadline">开放中</strong></div>
+            <div><span class="mini-label">当前状态</span><strong id="phase-state">提案收集中</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="signal-row" aria-label="项目概览">
+        <div class="signal-item"><strong id="stat-proposals">0</strong><span>收到的提案</span></div>
+        <div class="signal-item"><strong id="stat-participants">0</strong><span>参与者</span></div>
+        <div class="signal-item"><strong id="stat-rounds">1</strong><span>正在进行的轮次</span></div>
+        <p class="signal-note">这是一个会随着参与不断变化的项目。<br>现在的空白，正等着你的第一笔。</p>
+      </section>
+
+      <section class="participation-layout" id="participate">
+        <div class="proposals-column">
+          <div class="section-intro">
+            <div>
+              <p class="section-index">01 / COMMUNITY INPUT</p>
+              <h2>大家正在提出什么</h2>
+            </div>
+            <p class="section-explanation">通过审核的想法会出现在这里。投票阶段开启后，你可以选出最值得先做的一个。</p>
+          </div>
+          <div class="list-toolbar">
+            <span id="proposal-count-label">0 个公开提案</span>
+            <span class="toolbar-divider"></span>
+            <span id="list-mode-label">按最新提交排序</span>
+          </div>
+          <div class="proposal-list" id="proposal-list" aria-live="polite"></div>
+          <div class="empty-state" id="proposal-empty" hidden>
+            <span class="empty-number">01</span>
+            <h3>这里还没有公开提案</h3>
+            <p>你的想法可以成为第一条。提交后，经过审核就会出现在这里。</p>
+            <button class="secondary-button" type="button" data-scroll-to="submit-panel">写下第一个提案 <span aria-hidden="true">↗</span></button>
+          </div>
+        </div>
+
+        <aside class="submit-panel" id="submit-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="section-index">02 / MAKE A MARK</p>
+              <h2>定制这一轮</h2>
+            </div>
+            <span class="panel-symbol" aria-hidden="true">+</span>
+          </div>
+          <p class="panel-lead">你想让 Flycode 先变成什么？不用写得完美，先把想法放进来。</p>
+          <form id="proposal-form" novalidate>
+            <label class="field-label" for="proposal-title">提案标题 <span id="title-counter">0/80</span></label>
+            <input class="field-input" id="proposal-title" name="title" maxlength="80" placeholder="例如：增加一个项目成长地图" required>
+            <label class="field-label" for="proposal-description">说说你的想法 <span id="description-counter">0/1200 · 至少 10 个字</span></label>
+            <textarea class="field-input field-textarea" id="proposal-description" name="description" maxlength="1200" placeholder="它是什么？解决什么问题？为什么现在值得做？" required></textarea>
+            <label class="field-label" for="proposal-author">怎么称呼你 <span>可不填</span></label>
+            <input class="field-input" id="proposal-author" name="author" maxlength="30" placeholder="昵称或署名">
+            <label class="field-label" for="proposal-link">参考链接 <span>可不填</span></label>
+            <input class="field-input" id="proposal-link" name="link" type="url" maxlength="500" placeholder="https://...">
+            <input class="honeypot" id="proposal-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <button class="primary-button full-width" id="proposal-submit" type="submit">提交提案 <span aria-hidden="true">↗</span></button>
+            <p class="form-note">提交后会先进入审核。我们只公开通过审核的内容，不要求注册账号。</p>
+            <p class="form-message" id="proposal-message" role="status"></p>
+          </form>
+        </aside>
+      </section>
+
+      <section class="decision-section" id="decision-section" hidden>
+        <div class="section-intro compact-intro">
+          <div>
+            <p class="section-index">03 / COMMUNITY DECISION</p>
+            <h2>这一轮，大家选出了什么</h2>
+          </div>
+          <p class="section-explanation">投票结果是社区意见的一部分，最终会结合目标、成本和实际开发能力推进。</p>
+        </div>
+        <div class="decision-strip" id="decision-strip"></div>
+      </section>
+
+      <section class="timeline-section" id="timeline">
+        <div class="timeline-header">
+          <div>
+            <p class="section-index">04 / WHAT HAS CHANGED</p>
+            <h2>成长记录</h2>
+          </div>
+          <span class="timeline-mark" aria-hidden="true">↘</span>
+        </div>
+        <div class="timeline-list" id="timeline-list"></div>
+      </section>
+
+      <section class="closing-section">
+        <div class="closing-number">F/01</div>
+        <div class="closing-copy">
+          <p class="eyebrow">Flycode is still becoming</p>
+          <h2>下一步，<br><em>由你来写。</em></h2>
+        </div>
+        <div class="closing-action"><button class="primary-button" type="button" data-scroll-to="submit-panel">参与第一轮 <span aria-hidden="true">↗</span></button></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>FLYCODE / 0.1</span>
+      <span>一个持续生长的共创项目</span>
+      <span id="last-sync">正在连接...</span>
+    </footer>
+  </div>
+
+  <div class="modal-backdrop" id="admin-modal" hidden>
+    <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+      <div class="modal-header">
+        <div><p class="section-index">PRIVATE AREA</p><h2 id="admin-title">项目管理</h2></div>
+        <button class="icon-button" id="admin-close" type="button" aria-label="关闭管理窗口" title="关闭">×</button>
+      </div>
+      <div id="admin-login-view">
+        <p class="modal-intro">这里是发起人的工作台。第一版使用本地管理密钥，先用于本机体验；正式上线前需要换成安全的账号登录。</p>
+        <form id="admin-login-form">
+          <label class="field-label" for="admin-key">管理密钥</label>
+          <input class="field-input" id="admin-key" type="password" autocomplete="current-password" placeholder="输入管理密钥">
+          <button class="primary-button full-width" type="submit">进入工作台 <span aria-hidden="true">↗</span></button>
+          <p class="form-message" id="admin-login-message" role="status"></p>
+        </form>
+      </div>
+      <div id="admin-dashboard" hidden>
+        <div class="admin-summary" id="admin-summary"></div>
+        <div class="admin-block admin-review-workspace">
+          <div class="admin-block-heading review-heading">
+            <div><h3>提案审查工作台</h3><p>把不同状态的提案分开处理，列表可以独立滚动。</p></div>
+            <span id="pending-count"></span>
+          </div>
+          <div class="review-tabs" role="tablist" aria-label="提案状态">
+            <button class="review-tab active" type="button" data-review-tab="pending">待审核 <b id="pending-tab-count">0</b></button>
+            <button class="review-tab" type="button" data-review-tab="approved">已公开 <b id="approved-tab-count">0</b></button>
+            <button class="review-tab" type="button" data-review-tab="rejected">未采用 <b id="rejected-tab-count">0</b></button>
+          </div>
+          <section class="review-pane active" data-review-pane="pending">
+            <div class="review-toolbar">
+              <label class="select-all-label"><input type="checkbox" id="select-all-pending"> <span>全选待审核</span></label>
+              <div class="batch-actions">
+                <button type="button" id="batch-approve" class="small-button approve" disabled>批量通过</button>
+                <button type="button" id="batch-reject" class="small-button reject" disabled>批量不采用</button>
+                <button type="button" id="batch-delete-pending" class="small-button danger" disabled>批量删除</button>
+              </div>
+            </div>
+            <div class="admin-proposals review-list" id="admin-proposals"></div>
+          </section>
+          <section class="review-pane" data-review-pane="approved" hidden>
+            <div class="review-toolbar"><span class="admin-empty">已公开的提案会出现在访客页面。</span></div>
+            <div class="admin-proposals review-list" id="approved-proposals"></div>
+          </section>
+          <section class="review-pane" data-review-pane="rejected" hidden>
+            <div class="review-toolbar">
+              <label class="select-all-label"><input type="checkbox" id="select-all-rejected"> <span>全选未采用</span></label>
+              <div class="batch-actions">
+                <button type="button" id="batch-rereview" class="small-button approve" disabled>重新审查</button>
+                <button type="button" id="batch-delete-rejected" class="small-button danger" disabled>永久删除</button>
+              </div>
+            </div>
+            <div class="admin-proposals review-list" id="rejected-proposals"></div>
+          </section>
+        </div>
+        <div class="admin-block admin-actions-block">
+          <div class="admin-block-heading"><h3>推进当前阶段</h3><span id="admin-current-status"></span></div>
+          <div class="phase-actions" id="phase-actions"></div>
+          <div class="decision-form" id="decision-form" hidden>
+            <label class="field-label" for="decision-proposal">选择要执行的提案</label>
+            <select class="field-input" id="decision-proposal"></select>
+            <label class="field-label" for="decision-note">公布说明 <span>可不填</span></label>
+            <textarea class="field-input field-textarea small-textarea" id="decision-note" maxlength="800" placeholder="告诉参与者你为什么选择它，以及接下来会怎么做"></textarea>
+            <button class="primary-button" id="decision-submit" type="button">公布本轮决定 <span aria-hidden="true">↗</span></button>
+          </div>
+        </div>
+        <div class="admin-two-col">
+          <div class="admin-block">
+            <div class="admin-block-heading"><h3>发布进展</h3></div>
+            <form id="update-form">
+              <input class="field-input" id="update-title" maxlength="100" placeholder="更新标题">
+              <textarea class="field-input field-textarea small-textarea" id="update-body" maxlength="1200" placeholder="这次有什么变化？"></textarea>
+              <button class="secondary-button full-width" type="submit">发布到成长记录 <span aria-hidden="true">↗</span></button>
+              <p class="form-message" id="update-message" role="status"></p>
+            </form>
+          </div>
+          <div class="admin-block">
+            <div class="admin-block-heading"><h3>开启下一轮</h3></div>
+            <form id="phase-form">
+              <input class="field-input" id="phase-title" maxlength="100" placeholder="例如：Flycode 0.2">
+              <input class="field-input" id="phase-question" maxlength="500" placeholder="这一轮想讨论什么？">
+              <input class="field-input" id="phase-deadline-input" type="date">
+              <button class="secondary-button full-width" type="submit">创建新阶段 <span aria-hidden="true">↗</span></button>
+              <p class="form-message" id="phase-message" role="status"></p>
+            </form>
+          </div>
+        </div>
+        <div class="admin-footer-actions"><button class="quiet-link-button" id="export-data" type="button">导出项目数据</button><button class="quiet-link-button" id="admin-logout" type="button">退出工作台</button></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
