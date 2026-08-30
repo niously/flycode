@@ -2,9 +2,12 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 COPY server.js ./
+COPY db-schema.sql ./
+COPY scripts ./scripts
 COPY public ./public
 
 ENV NODE_ENV=production

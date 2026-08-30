@@ -84,7 +84,16 @@ function ensureDataFile() {
 
 function readDb() {
   ensureDataFile();
-  return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  const db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  db.project ||= {};
+  db.phases = Array.isArray(db.phases) ? db.phases : [];
+  db.proposals = Array.isArray(db.proposals) ? db.proposals : [];
+  db.updates = Array.isArray(db.updates) ? db.updates : [];
+  db.votes ||= {};
+  for (const phase of db.phases) {
+    phase.candidates = Array.isArray(phase.candidates) ? phase.candidates : [];
+  }
+  return db;
 }
 
 function writeDb(db) {
@@ -123,6 +132,35 @@ function currentPhase(db) {
   return db.phases.find((phase) => phase.id === db.project.currentPhaseId) || db.phases[db.phases.length - 1];
 }
 
+function candidateIdsFor(phase) {
+  return Array.isArray(phase?.candidates) ? [...new Set(phase.candidates.filter((id) => typeof id === 'string' && id))] : [];
+}
+
+function effectiveCandidateProposals(db, phase) {
+  if (!phase || phase.status !== 'voting') return [];
+  const approved = db.proposals.filter((proposal) => proposal.phaseId === phase.id && proposal.status === 'approved');
+  const configuredIds = candidateIdsFor(phase);
+  if (!configuredIds.length) return approved;
+  const approvedById = new Map(approved.map((proposal) => [proposal.id, proposal]));
+  const configured = configuredIds.map((id) => approvedById.get(id)).filter(Boolean);
+  return configured.length ? configured : approved;
+}
+
+function phaseForProposal(db, proposal) {
+  return db.phases.find((phase) => phase.id === proposal?.phaseId);
+}
+
+function assertProposalMutable(db, proposals) {
+  const locked = proposals.find((proposal) => ['voting', 'execution'].includes(phaseForProposal(db, proposal)?.status));
+  if (locked) throw new Error('本轮投票或执行已经开始，不能再修改提案。');
+}
+
+function validPhaseTransition(currentStatus, nextStatus) {
+  if (currentStatus === nextStatus) return true;
+  return (currentStatus === 'submitting' && nextStatus === 'voting')
+    || (currentStatus === 'execution' && nextStatus === 'archived');
+}
+
 function voteCountFor(db, proposalId) {
   return Object.values(db.votes || {}).reduce((total, phaseVotes) => {
     if (!phaseVotes || typeof phaseVotes !== 'object') return total;
@@ -130,17 +168,34 @@ function voteCountFor(db, proposalId) {
   }, 0);
 }
 
-function publicState(db) {
+function withVoteCount(db, proposal) {
+  return { ...proposal, voteCount: voteCountFor(db, proposal.id) };
+}
+
+function publicState(db, visitorId = '') {
   const phase = currentPhase(db);
   const proposals = db.proposals
     .filter((proposal) => proposal.status === 'approved' && (!phase || proposal.phaseId === phase.id))
-    .map((proposal) => ({ ...proposal, voteCount: voteCountFor(db, proposal.id) }))
+    .map((proposal) => withVoteCount(db, proposal))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const candidateProposals = effectiveCandidateProposals(db, phase).map((proposal) => withVoteCount(db, proposal));
+  const effectiveCandidateIds = candidateProposals.map((proposal) => proposal.id);
+  const responsePhase = phase
+    ? { ...phase, candidates: effectiveCandidateIds }
+    : phase;
+  const responsePhases = db.phases.map((item) => item.id === responsePhase?.id ? responsePhase : item);
+  const hasVoted = Boolean(phase && visitorId && db.votes?.[phase.id]?.[visitorId]);
   return {
     project: db.project,
-    phases: db.phases,
-    currentPhase: phase,
+    phases: responsePhases,
+    currentPhase: responsePhase,
     proposals,
+    candidateProposals,
+    voting: {
+      isOpen: phase?.status === 'voting',
+      candidateIds: effectiveCandidateIds,
+      hasVoted
+    },
     updates: [...db.updates].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     stats: {
       proposalCount: db.proposals.filter((proposal) => proposal.status !== 'rejected').length,
@@ -153,13 +208,15 @@ function publicState(db) {
 function adminState(db) {
   const phase = currentPhase(db);
   const allProposals = db.proposals
-    .map((proposal) => ({ ...proposal, voteCount: voteCountFor(db, proposal.id) }))
+    .map((proposal) => withVoteCount(db, proposal))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const decisionCandidates = effectiveCandidateProposals(db, phase).map((proposal) => withVoteCount(db, proposal));
   return {
     ...publicState(db),
     allProposals,
+    decisionCandidates,
     votes: db.votes,
-    currentPhase: phase
+    currentPhase: phase ? { ...phase, candidates: decisionCandidates.map((proposal) => proposal.id) } : phase
   };
 }
 
@@ -204,15 +261,25 @@ function requireAdmin(request, response) {
 
 function parseBody(request) {
   return new Promise((resolve, reject) => {
-    let raw = '';
+    const chunks = [];
+    let byteLength = 0;
+    let settled = false;
     request.on('data', (chunk) => {
-      raw += chunk;
-      if (Buffer.byteLength(raw) > 1024 * 1024) {
+      if (settled) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      byteLength += buffer.length;
+      if (byteLength > 1024 * 1024) {
+        settled = true;
         reject(new Error('请求内容过大。'));
         request.destroy();
+        return;
       }
+      chunks.push(buffer);
     });
     request.on('end', () => {
+      if (settled) return;
+      settled = true;
+      const raw = Buffer.concat(chunks).toString('utf8');
       if (!raw) return resolve({});
       try {
         resolve(JSON.parse(raw));
@@ -220,7 +287,12 @@ function parseBody(request) {
         reject(new Error('请求格式不是有效 JSON。'));
       }
     });
-    request.on('error', reject);
+    request.on('error', (error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
   });
 }
 
@@ -230,7 +302,8 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === 'GET' && url.pathname === '/api/state') {
-    return sendJson(response, 200, publicState(readDb()));
+    const visitorId = cleanText(request.headers['x-visitor-id'], 120);
+    return sendJson(response, 200, publicState(readDb(), visitorId));
   }
 
   if (request.method === 'GET' && url.pathname === '/api/admin/state') {
@@ -287,7 +360,7 @@ async function handleApi(request, response, url) {
           reviewedAt: null
         };
         db.proposals.push(proposal);
-        return publicState(db);
+        return publicState(db, cleanText(request.headers['x-visitor-id'], 120));
       });
       return sendJson(response, 201, state);
     } catch (error) {
@@ -304,11 +377,12 @@ async function handleApi(request, response, url) {
         const phase = currentPhase(db);
         if (!phase || phase.status !== 'voting') throw new Error('当前还没有开放投票。');
         const proposal = db.proposals.find((item) => item.id === proposalId);
-        if (!proposal || !phase.candidates.includes(proposalId)) throw new Error('这个提案不在本轮候选中。');
+        const candidates = effectiveCandidateProposals(db, phase);
+        if (!proposal || !candidates.some((item) => item.id === proposalId)) throw new Error('这个提案不在本轮候选中。');
         db.votes[phase.id] ||= {};
         if (db.votes[phase.id][visitorId]) throw new Error('你已经在本轮投过票了。');
         db.votes[phase.id][visitorId] = { proposalId, createdAt: now() };
-        return publicState(db);
+        return publicState(db, visitorId);
       });
       return sendJson(response, 201, state);
     } catch (error) {
@@ -329,6 +403,7 @@ async function handleApi(request, response, url) {
         const selected = db.proposals.filter((proposal) => ids.includes(proposal.id));
         if (selected.length !== ids.length) throw new Error('部分提案不存在，请刷新后重试。');
         if (action === 'delete') {
+          assertProposalMutable(db, selected);
           const deletable = selected.every((proposal) => proposal.status === 'pending' || proposal.status === 'rejected');
           if (!deletable) throw new Error('只能删除待审核或未采用的提案。');
           db.proposals = db.proposals.filter((proposal) => !ids.includes(proposal.id));
@@ -336,8 +411,9 @@ async function handleApi(request, response, url) {
             phase.candidates = phase.candidates.filter((id) => !ids.includes(id));
           }
         } else {
+          assertProposalMutable(db, selected);
           const expectedStatus = action === 'approve' ? 'pending' : action === 'reject' ? 'pending' : 'rejected';
-          if (!selected.every((proposal) => proposal.status === expectedStatus)) {
+          if (selected.some((proposal) => proposal.status !== expectedStatus)) {
             throw new Error(action === 'rereview' ? '只能重新审查未采用的提案。' : '所选提案中包含状态已变化的项目，请刷新后重试。');
           }
           const nextStatus = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'pending';
@@ -363,6 +439,7 @@ async function handleApi(request, response, url) {
       const state = await mutateDb((db) => {
         const proposal = db.proposals.find((item) => item.id === proposalId);
         if (!proposal) throw new Error('找不到这个提案。');
+        assertProposalMutable(db, [proposal]);
         proposal.status = status;
         proposal.reviewedAt = now();
         for (const phase of db.phases) {
@@ -384,6 +461,9 @@ async function handleApi(request, response, url) {
       const state = await mutateDb((db) => {
         const phase = currentPhase(db);
         if (!phase) throw new Error('找不到当前阶段。');
+        if (!validPhaseTransition(phase.status, status)) {
+          throw new Error(`不能从当前阶段状态直接切换到该状态，请刷新后重试。`);
+        }
         if (status === 'voting') {
           const approved = db.proposals.filter((proposal) => proposal.phaseId === phase.id && proposal.status === 'approved');
           if (!approved.length) throw new Error('至少审核通过一个提案后才能开启投票。');
@@ -409,7 +489,8 @@ async function handleApi(request, response, url) {
         const phase = currentPhase(db);
         const proposal = db.proposals.find((item) => item.id === proposalId);
         if (!phase || phase.status !== 'voting') throw new Error('只有投票阶段才能公布决定。');
-        if (!proposal || !phase.candidates.includes(proposalId)) throw new Error('请选择本轮候选提案。');
+        const candidates = effectiveCandidateProposals(db, phase);
+        if (!proposal || !candidates.some((item) => item.id === proposalId)) throw new Error('请选择本轮候选提案。');
         phase.status = 'execution';
         phase.chosenProposalId = proposalId;
         phase.decisionNote = note;

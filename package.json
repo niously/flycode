@@ -7,9 +7,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node tests/smoke.js"
+    "test": "node tests/smoke.js",
+    "migrate:postgres": "node scripts/migrate-json-to-postgres.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
   }
 }

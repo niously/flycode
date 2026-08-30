@@ -26,6 +26,36 @@ async function request(pathname, options = {}) {
   return { status: response.status, headers: response.headers, body, text };
 }
 
+async function splitUtf8Proposal(payload) {
+  const net = require('net');
+  const body = Buffer.from(JSON.stringify(payload), 'utf8');
+  const requestHead = Buffer.from(
+    `POST /api/proposals HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nContent-Type: application/json\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n`,
+    'ascii'
+  );
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: '127.0.0.1', port });
+    const responseChunks = [];
+    socket.on('data', (chunk) => responseChunks.push(chunk));
+    socket.on('error', reject);
+    socket.on('close', () => {
+      try {
+        const raw = Buffer.concat(responseChunks).toString('utf8');
+        const separator = raw.indexOf('\r\n\r\n');
+        const status = Number(raw.match(/^HTTP\/1\.1 (\d+)/)?.[1]);
+        resolve({ status, body: JSON.parse(raw.slice(separator + 4)) });
+      } catch (error) {
+        reject(error);
+      }
+    });
+    socket.on('connect', () => {
+      socket.write(requestHead);
+      for (const byte of body) socket.write(Buffer.from([byte]));
+      socket.end();
+    });
+  });
+}
+
 function post(pathname, payload, headers = {}) {
   return request(pathname, {
     method: 'POST',
@@ -108,10 +138,13 @@ async function run() {
 
   const createdIds = [];
   for (let index = 1; index <= 3; index += 1) {
-    const submitted = await post('/api/proposals', {
+    const payload = {
       title: `自动测试提案 ${index}`,
       description: '这是一条用于验证提案审查、重新审查和删除流程的临时测试内容。'
-    }, { 'X-Forwarded-For': `10.88.0.${index}` });
+    };
+    const submitted = index === 1
+      ? await splitUtf8Proposal({ title: '自动测试提案 1', description: '这是一条用于验证中文编码和投票流程的测试内容。' })
+      : await post('/api/proposals', payload, { 'X-Forwarded-For': `10.88.0.${index}` });
     assert.equal(submitted.status, 201);
   }
 
@@ -161,10 +194,32 @@ async function run() {
   const voting = await post('/api/admin/phase/status', { status: 'voting' }, adminHeaders);
   assert.equal(voting.status, 200);
   assert.deepEqual(voting.body.currentPhase.candidates, [approvedId]);
+  assert.equal(voting.body.decisionCandidates.length, 1);
+  assert.equal(voting.body.decisionCandidates[0].id, approvedId);
+
+  const databasePath = path.join(dataDir, 'db.json');
+  const snapshot = JSON.parse(fs.readFileSync(databasePath, 'utf8'));
+  snapshot.phases[0].candidates = [];
+  fs.writeFileSync(databasePath, JSON.stringify(snapshot, null, 2));
+  const recoveredCandidates = await request('/api/admin/state', { headers: adminHeaders });
+  assert.equal(recoveredCandidates.status, 200);
+  assert.deepEqual(recoveredCandidates.body.currentPhase.candidates, [approvedId]);
+  assert.equal(recoveredCandidates.body.decisionCandidates[0].id, approvedId);
 
   const vote = await post('/api/votes', { proposalId: approvedId, visitorId: 'test-visitor-1' });
   assert.equal(vote.status, 201);
   assert.equal(vote.body.proposals[0].voteCount, 1);
+  assert.equal(vote.body.voting.hasVoted, true);
+
+  const votedState = await request('/api/state', { headers: { 'X-Visitor-Id': 'test-visitor-1' } });
+  assert.equal(votedState.status, 200);
+  assert.equal(votedState.body.voting.hasVoted, true);
+
+  const lockedReview = await post('/api/admin/proposals/review', {
+    proposalId: approvedId,
+    status: 'rejected'
+  }, adminHeaders);
+  assert.equal(lockedReview.status, 400);
 
   const duplicateVote = await post('/api/votes', { proposalId: approvedId, visitorId: 'test-visitor-1' });
   assert.equal(duplicateVote.status, 400);
