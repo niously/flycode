@@ -135,12 +135,13 @@ master
 当前最新提交：
 
 ```text
-79c8f35 Connect Flycode backend to CloudBase PostgreSQL
+1390aba Add vote withdrawal and refresh Flycode branding
 ```
 
 最近关键提交：
 
 ```text
+1390aba Add vote withdrawal and refresh Flycode branding
 79c8f35 Connect Flycode backend to CloudBase PostgreSQL
 05165f5 Support CloudBase PostgreSQL connection fields
 3b9638a Fix voting flow and prepare PostgreSQL migration
