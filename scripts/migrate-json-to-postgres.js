@@ -9,10 +9,33 @@ const dataFile = path.join(process.env.FLYCODE_DATA_DIR
   ? path.resolve(process.env.FLYCODE_DATA_DIR)
   : path.join(root, 'data'), 'db.json');
 const schemaFile = path.join(root, 'db-schema.sql');
-const databaseUrl = process.env.DATABASE_URL || process.env.FLYCODE_DATABASE_URL;
 
-if (!databaseUrl) {
-  console.error('缺少 DATABASE_URL 或 FLYCODE_DATABASE_URL。');
+function databaseConfig() {
+  const connectionString = process.env.DATABASE_URL || process.env.FLYCODE_DATABASE_URL;
+  if (connectionString) {
+    return {
+      connectionString,
+      ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false }
+    };
+  }
+
+  const required = ['PGHOST', 'PGDATABASE', 'PGUSER', 'PGPASSWORD'];
+  const missing = required.filter((name) => !process.env[name]);
+  if (missing.length) return null;
+  return {
+    host: process.env.PGHOST,
+    port: Number(process.env.PGPORT || 5432),
+    database: process.env.PGDATABASE,
+    user: process.env.PGUSER,
+    password: process.env.PGPASSWORD,
+    ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false }
+  };
+}
+
+const postgresConfig = databaseConfig();
+
+if (!postgresConfig) {
+  console.error('缺少 PostgreSQL 连接配置。设置 DATABASE_URL，或设置 PGHOST、PGPORT、PGDATABASE、PGUSER、PGPASSWORD。');
   process.exit(2);
 }
 
@@ -35,7 +58,7 @@ function asDate(value) {
 
 async function migrate() {
   const db = readJson();
-  const client = new Client({ connectionString: databaseUrl, ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false } });
+  const client = new Client(postgresConfig);
   await client.connect();
   try {
     await client.query('BEGIN');
