@@ -347,7 +347,7 @@ function renderProposals(proposals, isVoting, phase) {
   if (!proposals.length) return;
 
   const candidateIds = new Set(state.public?.voting?.candidateIds || phase?.candidates || []);
-  const alreadyVoted = Boolean(state.public?.voting?.hasVoted || localStorage.getItem(`flycode-voted-${phase.id}`));
+  const alreadyVoted = Boolean(state.public?.voting?.hasVoted);
   proposals.forEach((proposal, index) => {
     const card = document.createElement('article');
     const candidate = isVoting && candidateIds.has(proposal.id);
@@ -514,7 +514,6 @@ async function handleVote(proposalId) {
   if (!phase) return;
   try {
     state.public = await api('/api/votes', { method: 'POST', body: JSON.stringify({ proposalId, visitorId: state.visitorId }) });
-    localStorage.setItem(`flycode-voted-${phase.id}`, '1');
     showToast('投票已记录。');
     renderPublic();
     if (state.adminKey) await loadAdmin(false);
