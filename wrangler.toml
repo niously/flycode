@@ -1,0 +1,6 @@
+name = "flycode"
+main = "worker.mjs"
+compatibility_date = "2026-08-30"
+
+[vars]
+BACKEND_ORIGIN = "https://flycode-305260-9-1465609042.sh.run.tcloudbase.com"
