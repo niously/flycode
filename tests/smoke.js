@@ -211,9 +211,30 @@ async function run() {
   assert.equal(vote.body.proposals[0].voteCount, 1);
   assert.equal(vote.body.voting.hasVoted, true);
 
+  const withdrawn = await post('/api/admin/phase/withdraw-voting', {}, adminHeaders);
+  assert.equal(withdrawn.status, 200);
+  assert.equal(withdrawn.body.currentPhase.status, 'submitting');
+  assert.deepEqual(withdrawn.body.currentPhase.candidates, []);
+  assert.equal(withdrawn.body.allProposals.find((proposal) => proposal.id === approvedId).status, 'pending');
+  assert.equal(withdrawn.body.allProposals.find((proposal) => proposal.id === approvedId).voteCount, 0);
+  assert.deepEqual(withdrawn.body.votes[withdrawn.body.currentPhase.id], {});
+
+  const reopened = await post('/api/admin/proposals/review', {
+    proposalId: approvedId,
+    status: 'approved'
+  }, adminHeaders);
+  assert.equal(reopened.status, 200);
+  const votingAgain = await post('/api/admin/phase/status', { status: 'voting' }, adminHeaders);
+  assert.equal(votingAgain.status, 200);
+  assert.deepEqual(votingAgain.body.currentPhase.candidates, [approvedId]);
+
   const votedState = await request('/api/state', { headers: { 'X-Visitor-Id': 'test-visitor-1' } });
   assert.equal(votedState.status, 200);
-  assert.equal(votedState.body.voting.hasVoted, true);
+  assert.equal(votedState.body.voting.hasVoted, false);
+
+  const secondVote = await post('/api/votes', { proposalId: approvedId, visitorId: 'test-visitor-1' });
+  assert.equal(secondVote.status, 201);
+  assert.equal(secondVote.body.proposals[0].voteCount, 1);
 
   const lockedReview = await post('/api/admin/proposals/review', {
     proposalId: approvedId,

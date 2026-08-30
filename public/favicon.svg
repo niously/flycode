@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Flycode</title>
+  <desc id="desc">Two paths meeting to form an F</desc>
+  <rect width="64" height="64" rx="10" fill="#171816"/>
+  <path d="M17 16h30M17 31h22M17 16v32" fill="none" stroke="#d7f34b" stroke-width="7" stroke-linecap="square"/>
+  <path d="M39 31l9 9-9 9" fill="none" stroke="#f06b4f" stroke-width="5" stroke-linecap="square" stroke-linejoin="miter"/>
+  <circle cx="48" cy="16" r="4" fill="#f5f3ee"/>
+</svg>

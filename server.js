@@ -530,6 +530,33 @@ async function handleApi(request, response, url) {
     }
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/admin/phase/withdraw-voting') {
+    if (!requireAdmin(request, response)) return;
+    try {
+      const state = await mutateStore((db) => {
+        const phase = currentPhase(db);
+        if (!phase || phase.status !== 'voting') throw new Error('只有投票进行中时才能撤回投票。');
+        const candidates = effectiveCandidateProposals(db, phase);
+        for (const proposal of candidates) {
+          if (proposal.status === 'approved') {
+            proposal.status = 'pending';
+            proposal.reviewedAt = null;
+          }
+        }
+        phase.status = 'submitting';
+        phase.candidates = [];
+        phase.chosenProposalId = null;
+        phase.decisionNote = '';
+        phase.decidedAt = null;
+        db.votes[phase.id] = {};
+        return adminState(db);
+      });
+      return sendJson(response, 200, state);
+    } catch (error) {
+      return sendJson(response, 400, { error: error.message });
+    }
+  }
+
   if (request.method === 'POST' && url.pathname === '/api/admin/phase/status') {
     if (!requireAdmin(request, response)) return;
     const status = cleanText(body.status, 20);

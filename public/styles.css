@@ -54,13 +54,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   place-items: center;
   width: 31px;
   height: 31px;
+  overflow: hidden;
   background: var(--ink);
   color: var(--acid);
-  font-family: var(--font-mono);
-  font-size: 15px;
-  line-height: 1;
 }
-.brand-mark span { color: var(--coral); }
+.brand-mark img { display: block; width: 100%; height: 100%; }
 .brand-state { color: var(--muted); font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: .08em; }
 .main-nav { display: flex; align-items: center; gap: 28px; }
 .nav-link { position: relative; padding: 9px 0; color: var(--muted); font-size: 13px; text-decoration: none; }

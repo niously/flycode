@@ -429,7 +429,7 @@ function renderPhaseActions(phase, data) {
     els.phaseActions.innerHTML = `<button class="phase-action" type="button" data-phase-status="voting" ${approved.length ? '' : 'disabled'}>审核完成，开启投票</button><span class="admin-empty">${approved.length ? `已有 ${approved.length} 个通过的提案` : '至少通过一个提案后才能开启投票'}</span>`;
   } else if (phase.status === 'voting') {
     els.phaseActions.innerHTML = candidates.length
-      ? '<span class="admin-empty">投票进行中。选择一个候选提案并公布决定。</span>'
+      ? '<span class="admin-empty">投票进行中。选择一个候选提案并公布决定。</span><button class="phase-action secondary" type="button" data-withdraw-voting>撤回投票，重新审核</button>'
       : '<span class="admin-empty error">当前没有可决定的候选提案，请刷新工作台并检查已公开提案。</span>';
     els.decisionForm.hidden = candidates.length === 0;
     els.decisionProposal.innerHTML = candidates.length
@@ -569,6 +569,23 @@ async function changePhaseStatus(status) {
   }
 }
 
+async function withdrawVoting() {
+  if (!window.confirm('确定撤回本轮投票吗？当前候选提案会回到待审核，已经产生的票数会清零。')) return;
+  try {
+    state.admin = await api('/api/admin/phase/withdraw-voting', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': state.adminKey },
+      body: JSON.stringify({})
+    });
+    state.public = await api('/api/state');
+    renderPublic();
+    renderAdmin();
+    showToast('投票已撤回，候选提案回到待审核。');
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 async function publishDecision() {
   const proposalId = els.decisionProposal.value;
   if (!proposalId) return showToast('请先选择一个提案。', true);
@@ -682,6 +699,11 @@ els.rejectedProposals.addEventListener('click', (event) => {
 });
 
 els.phaseActions.addEventListener('click', (event) => {
+  const withdrawButton = event.target.closest('[data-withdraw-voting]');
+  if (withdrawButton) {
+    withdrawVoting();
+    return;
+  }
   const button = event.target.closest('[data-phase-status]');
   if (button) changePhaseStatus(button.dataset.phaseStatus);
 });
