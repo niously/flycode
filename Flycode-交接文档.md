@@ -2,64 +2,94 @@
 
 > 用途：在新对话中直接恢复 Flycode 项目上下文。
 > 更新时间：2026-08-30
-> 项目负责人：用户本人（发起人、初期开发者、维护者和最终决策者）
+> 项目负责人：用户本人（发起人、初期维护者和最终决策者）
 
 ---
 
 ## 1. 项目定位
 
-Flycode 是一个从零开始、由网友参与定制和发展的成长型网站。
+Flycode 是一个由网友参与定制和发展的共创网站。
 
-核心机制：
+核心流程：
 
 ```text
-提出问题 → 网友投稿 → 发起人审核 → 社区投票 → 发起人决定 → 执行并记录 → 开启下一轮
+提出问题 -> 网友投稿 -> 发起人审核 -> 社区投票 -> 发起人决定 -> 执行并记录 -> 开启下一轮
 ```
 
-当前宣传方向：
+当前对外说明：
 
 > 大家一起来讨论，参与 Flycode 的定制吧！
 
-第一轮问题：
-
-> Flycode 0.1 上线后，下一步最值得优先完成什么？
-
-社区投票是参考意见，最终由发起人结合项目目标、可行性和成本决定。若不采用最高票提案，应公开说明原因。
+社区投票是重要参考，最终由发起人结合项目目标、成本和可行性作决定；没有选择最高票提案时，应公开说明原因。
 
 ---
 
-## 2. 当前已经完成的功能
+## 2. 当前线上状态
+
+线上地址：
+
+```text
+https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
+```
+
+健康检查：
+
+```text
+https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health
+```
+
+2026-08-30 已实际验证：
+
+```text
+首页正常
+/api/health: HTTP 200
+/api/state: HTTP 200
+新版 voting 字段存在
+新版 candidateProposals 字段存在
+PostgreSQL 持久化已启用
+```
+
+当前活动数据：
+
+```text
+当前阶段：voting（投票中）
+公开提案：1
+候选提案：水印去除
+候选提案 ID：proposal-mtfgm3f1-c88189
+成长记录：1
+```
+
+当前访客可以为“水印去除”投票；发起人可以在管理工作台选择该候选并公布决定。
+
+---
+
+## 3. 已完成的功能
 
 当前 MVP 已实现：
 
-- Flycode 公开首页
-- 当前阶段展示
-- 成长时间线
-- 网友提交文字提案
-- 可选参考链接
+- Flycode 公开首页和手机优先布局
+- 当前阶段、项目统计和成长时间线
+- 网友提交文字提案和可选参考链接
+- 字数统计、草稿本地保存、提交加载状态
 - 发起人管理员入口
-- 待审核 / 已公开 / 未采用三栏提案审查工作台
-- 审核通过
-- 批量通过
-- 批量不采用
-- 批量删除待审核提案
-- 批量删除未采用提案
-- 未采用提案重新审查，恢复为待审核
+- 待审核 / 已公开 / 未采用三栏审查工作台
+- 单条审核、批量通过、批量不采用、批量删除
+- 未采用提案重新审查
 - 开启投票阶段
-- 网友投票
-- 同一浏览器同一阶段重复投票拦截
-- 发起人公布决定
-- 发布项目进展
-- 开启下一阶段
+- 访客投票和服务端重复投票拦截
+- 服务器返回当前候选和当前访客投票状态
+- 投票阶段候选恢复：旧候选快照为空时，能从已公开提案恢复
+- 投票开始后锁定本轮提案，避免候选和票数不同步
+- 发起人公布决定、发布进展、开启下一阶段
 - 项目数据导出
-- 手机优先的页面布局
-- 投稿表单字数统计
-- 未提交草稿保存在浏览器 localStorage
-- 提交加载状态和成功提示
+- 管理工作台手动刷新按钮
+- 中文请求体 UTF-8 安全处理，避免网络分块导致乱码
 - 基本安全响应头
-- 生产环境禁止使用默认管理员密钥
-- 容器 SIGTERM 优雅退出
+- 生产环境禁止默认管理员密钥
+- SIGTERM 优雅退出
 - CloudBase Run Dockerfile
+- JSON 本机回退模式
+- CloudBase PostgreSQL 持久化模式
 - 隔离式自动冒烟测试
 
 明确暂未实现：
@@ -69,13 +99,12 @@ Flycode 是一个从零开始、由网友参与定制和发展的成长型网站
 - 多管理员账号和角色系统
 - 图片、视频上传
 - 评论、私信、关注
-- 实时协作
-- 完整反作弊系统
-- PostgreSQL 数据库接入
+- 完整反刷和风控系统
+- 自动部署（当前仍需控制台手动点部署）
 
 ---
 
-## 3. 本机项目位置
+## 4. 本机项目和仓库
 
 项目目录：
 
@@ -83,16 +112,16 @@ Flycode 是一个从零开始、由网友参与定制和发展的成长型网站
 C:\Users\l2104\flycode
 ```
 
-Git 仓库：
-
-```text
-git@gitee.com:nious101/flycode.git
-```
-
-网页仓库地址：
+Gitee 仓库：
 
 ```text
 https://gitee.com/nious101/flycode
+```
+
+远程地址：
+
+```text
+git@gitee.com:nious101/flycode.git
 ```
 
 当前分支：
@@ -104,32 +133,143 @@ master
 当前最新提交：
 
 ```text
-5ed284a Merge Gitee repository metadata
+79c8f35 Connect Flycode backend to CloudBase PostgreSQL
+```
+
+最近关键提交：
+
+```text
+79c8f35 Connect Flycode backend to CloudBase PostgreSQL
+05165f5 Support CloudBase PostgreSQL connection fields
+3b9638a Fix voting flow and prepare PostgreSQL migration
 ```
 
 主要文件：
 
 ```text
-server.js                    Node.js 后端和 API
-public/index.html            页面结构
-public/styles.css            页面样式
-public/app.js                前端逻辑
-package.json                npm 配置
-Dockerfile                   CloudBase Run 容器配置
-.dockerignore                容器构建排除项
-data/db.json                 本机 JSON 数据，仅用于本地测试
- tests/smoke.js              隔离式自动测试
-公开测试部署路线.md          部署路线和限制说明
-使用指南.md                  用户操作说明
+server.js                              Node.js 后端和 API
+public/index.html                      页面结构
+public/styles.css                      页面样式
+public/app.js                          前端逻辑
+package.json                           npm 配置
+package-lock.json                      固定依赖版本
+Dockerfile                             CloudBase Run 构建配置
+.dockerignore                          发布排除规则
+db-schema.sql                          PostgreSQL 表结构
+scripts/migrate-json-to-postgres.js    JSON 到 PostgreSQL 导入工具
+data/db.json                           本机 JSON 回退数据，仅本机测试
+tests/smoke.js                         隔离式自动测试
+flycode-cloudbase-run.zip              当前发布包
 ```
 
-注意：`data/db.json` 已被 `.gitignore` 排除，不应提交到 Gitee 或打包上传。
+注意：`data/db.json` 已被 Git 排除，不应提交到 Gitee 或上传为线上数据源。
 
 ---
 
-## 4. 本机运行和测试
+## 5. 数据持久化现状
 
-在 Git Bash / bash 终端执行：
+### 线上：CloudBase PostgreSQL 已启用
+
+CloudBase 环境：
+
+```text
+flycode-d9gd8dv0xc55f8e85
+```
+
+PostgreSQL 实例：
+
+```text
+pgdb-cwcwkk6r
+```
+
+默认 schema：
+
+```text
+public
+```
+
+已创建的 Flycode 主要表：
+
+```text
+flycode_state
+projects
+phases
+proposals
+phase_candidates
+votes
+decisions
+updates
+audit_logs
+schema_migrations
+```
+
+当前线上服务使用 `flycode_state` 作为完整活动状态快照：
+
+```text
+id = main
+payload = 当前完整 Flycode JSON 状态
+```
+
+这样保留现有 API 和前端逻辑，同时避免 CloudBase Run 容器本地文件在重启或重新部署后丢失数据。
+
+已经从本机保存的真实线上缓存恢复并验证：
+
+```text
+项目：Flycode
+阶段：1
+提案：1
+提案：水印去除
+成长记录：1
+```
+
+### 本机：JSON 回退模式
+
+未配置 CloudBase API Key 时，`server.js` 自动继续使用：
+
+```text
+data/db.json
+```
+
+因此本机测试不需要数据库凭证。
+
+---
+
+## 6. 线上环境变量
+
+CloudBase Run 当前应保留：
+
+```text
+NODE_ENV=production
+PORT=8080
+FLYCODE_DATA_DIR=/data
+FLYCODE_ADMIN_KEY=（生产管理员密钥）
+FLYCODE_CLOUDBASE_API_KEY=（CloudBase PostgreSQL 服务端 API Key）
+```
+
+可选但推荐显式配置：
+
+```text
+FLYCODE_CLOUDBASE_ENV_ID=flycode-d9gd8dv0xc55f8e85
+```
+
+安全规则：
+
+- 不把管理员密钥或 CloudBase API Key 写入 Git、代码、README、截图或交接文档。
+- 不把 Key 放进前端 JavaScript。
+- 后端使用 `FLYCODE_CLOUDBASE_API_KEY` 调用 CloudBase PostgreSQL 管理 SQL 接口。
+- 管理员 API 仍使用：
+
+```text
+X-Admin-Key: <生产管理员密钥>
+```
+
+- 如果重新生成 CloudBase API Key，只需在 CloudBase Run 环境变量中替换 `FLYCODE_CLOUDBASE_API_KEY` 后重新部署，不需要改代码。
+
+---
+
+## 7. 本机运行和测试
+
+Git Bash / bash：
 
 ```bash
 cd C:/Users/l2104/flycode
@@ -140,12 +280,6 @@ npm start
 
 ```text
 http://localhost:4173
-```
-
-同一 Wi-Fi 下手机访问地址通常为：
-
-```text
-http://192.168.x.x:4173
 ```
 
 自动测试：
@@ -161,7 +295,7 @@ npm test
 PASS: isolated Flycode smoke checks
 ```
 
-自动测试使用随机端口和临时数据目录，不会修改真实的 `data/db.json`。
+自动测试使用随机端口和临时数据目录，不会修改真实本机数据或线上 PostgreSQL。
 
 本机默认管理员密钥仅用于本机体验：
 
@@ -169,279 +303,116 @@ PASS: isolated Flycode smoke checks
 flycode-local
 ```
 
-不要把这个默认密钥用于公网服务。
+不要在公网服务使用该默认值。
 
 ---
 
-## 5. 当前线上部署
+## 8. 发布与日常维护
 
-CloudBase Run 线上地址：
+### 普通功能或页面更新
 
-```text
-https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
-```
-
-健康检查地址：
+以后大多数更新只需要：
 
 ```text
-https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health
+提出需求
+-> 助手修改和测试
+-> 助手推送 Gitee
+-> 用户在 CloudBase Run 点一次“部署”
+-> 助手验证线上结果
 ```
 
-已验证健康返回：
+通常不需要重新填写环境变量；CloudBase Run 会保留现有变量。
 
-```json
-{"ok":true,"service":"flycode"}
-```
-
-已验证线上状态：
+当前发布包位置：
 
 ```text
-首页：HTTP 200
-HTTPS：正常
-安全响应头：正常
-/api/health：正常
-/api/state：正常
-未带管理员密钥访问 /api/admin/state：HTTP 401
-当前阶段：submitting（投稿中）
-当前公开提案：0
-成长记录：1
+C:\Users\l2104\flycode\flycode-cloudbase-run.zip
 ```
 
-CloudBase Run 配置重点：
+部署页面通常保留：
 
 ```text
+Git 仓库：https://gitee.com/nious101/flycode.git
+分支：master
 服务名称：flycode
-服务端口：8080
 访问端口：80
-Dockerfile：Dockerfile
-运行模式：始终自动扩缩容
-最小实例数：0
-最大实例数：1
+服务端口：8080
+部署类型：容器型服务
 ```
 
-当前线上服务是小范围测试版，不应立即进行大规模宣传。
+如果服务页面使用 Git 平台部署，优先保持 Gitee 仓库和 `master` 分支，不必每次上传 ZIP。
+
+### 哪些情况会多一步
+
+- 改数据库表结构：需要增加并执行一次 PostgreSQL migration。
+- 更换 API Key 或管理员密钥：在环境变量页面替换对应值后重新部署。
+- 改 Dockerfile、Node 依赖：重新部署时平台会重新构建镜像。
+- 改域名、网络或权限：需要控制台额外配置。
+
+### 后续可优化
+
+可以研究 Gitee Webhook 或 CloudBase 自动构建，实现：
+
+```text
+推送 Gitee -> CloudBase 自动部署
+```
+
+当前尚未配置自动部署。
 
 ---
 
-## 6. 线上环境变量和密钥
+## 9. 重要已知限制和风险
 
-当前生产环境必须配置：
-
-```text
-NODE_ENV=production
-PORT=8080
-FLYCODE_DATA_DIR=/data
-FLYCODE_ADMIN_KEY=（腾讯云 CloudBase Run 中已配置的生产管理员密钥）
-```
-
-安全说明：
-
-- 实际生产管理员密钥没有写入本交接文档。
-- 当前对话也没有保存实际密钥原文，不能凭空恢复或猜测。
-- 新对话如果需要调用管理员 API，应让用户从腾讯云 CloudBase Run 服务的环境变量中查看，或由用户重新提供。
-- 不要把管理员密钥写入 Git、README、前端 JavaScript、截图或公开聊天。
-- 不要把腾讯云 API Key、SecretId、SecretKey、PostgreSQL 密码写进代码仓库。
-
-管理员 API 使用请求头：
-
-```text
-X-Admin-Key: <生产管理员密钥>
-```
-
-本地默认值和线上生产值必须区分。
+- 当前 PostgreSQL 后端用 `flycode_state` JSONB 快照保存完整活动状态，优先保证低成本和兼容现有 API。
+- 后续流量增长后，应逐步把高频写入拆到 `proposals`、`votes`、`phases` 等关系表，使用更细粒度事务和唯一约束。
+- `flycode_state` 当前在服务进程内使用写入队列，单实例适合小范围测试；多实例正式扩容前应完成数据库原子更新/行锁改造。
+- 访客身份当前是浏览器生成的 `visitorId`，不是正式账号系统；重复投票拦截主要针对同一浏览器。
+- 管理入口仍是共享管理员密钥，不是正式登录系统。
+- 默认 CloudBase 域名适合测试；中国大陆长期正式公开应准备备案域名。
+- 不要大规模宣传前再开启多实例或复杂社交功能。
 
 ---
 
-## 7. 最重要的已知限制
+## 10. 下一步建议
 
-当前后端仍然通过本地 JSON 文件保存数据：
+当前在线阶段已经是投票中，优先顺序：
 
-```text
-data/db.json
-```
+1. 在手机和不同浏览器实际测试“水印去除”投票。
+2. 通过管理工作台查看票数，选择候选并公布决定。
+3. 发布一条执行进展，保留完整成长记录。
+4. 完成本轮后归档，并创建下一轮问题。
+5. 若开始有陌生网友持续参与，优先补管理员登录、备份、限流和更可靠的投票身份。
+6. 再把 PostgreSQL 快照存储逐步升级为关系表的细粒度读写。
 
-线上容器默认使用：
-
-```text
-/data
-```
-
-但 CloudBase Run 容器本地文件不适合作为长期可靠数据库。服务重启、重新部署、实例迁移或以后增加多实例时，JSON 数据可能丢失或出现并发写入问题。
-
-因此当前线上版本只适合：
-
-- 自己测试
-- 少量熟人测试
-- 验证投稿和投票机制
-- 验证手机访问体验
-
-当前不适合：
-
-- 长期正式运营
-- 大规模视频宣传后直接收集数据
-- 多实例运行
-- 把重要活动数据只保存在容器文件里
-
----
-
-## 8. 新对话的第一件事
-
-新对话应先读取本文件：
-
-```text
-C:\Users\l2104\flycode\Flycode-交接文档.md
-```
-
-然后不要重复创建项目，也不要重复推送 Gitee。先确认：
-
-1. 项目目录仍然存在
-2. Gitee 仓库仍是 `nious101/flycode`
-3. CloudBase Run 地址仍可访问
-4. `npm test` 通过
-5. 当前线上 PostgreSQL 是否已经接入（目前尚未接入）
-
----
-
-## 9. 推荐的下一条主线：迁移 PostgreSQL
-
-用户已经创建了 PostgreSQL 类型的 CloudBase 环境。下一步不是继续增加页面小功能，而是先把数据层迁移到 PostgreSQL。
-
-推荐顺序：
-
-```text
-读取 PostgreSQL 连接信息
-→ 设计数据表
-→ 创建表和索引
-→ 修改 server.js 数据访问层
-→ 导入初始 Flycode 数据
-→ 本机使用测试数据库回归
-→ 配置 CloudBase Run 数据库环境变量
-→ 重新部署
-→ 验证投稿、审核、投票、决定和导出
-```
-
-建议的数据表：
-
-```text
-projects
-phases
-proposals
-votes
-decisions
-updates
-audit_logs
-```
-
-建议保留现有 API 路径，尽量不重写前端：
-
-```text
-GET  /api/health
-GET  /api/state
-GET  /api/admin/state
-POST /api/proposals
-POST /api/votes
-POST /api/admin/proposals/review
-POST /api/admin/proposals/batch
-POST /api/admin/phase/status
-POST /api/admin/decision
-POST /api/admin/updates
-POST /api/admin/phases
-```
-
-迁移时必须注意：
-
-- 先备份现有 `data/db.json`
-- 不把数据库密码提交到 Git
-- 后端连接信息放 CloudBase Run 环境变量或密钥管理
-- 使用参数化 SQL
-- 投票写入必须有唯一约束，避免并发重复投票
-- 管理员权限仍需保留
-- 先用测试数据库验证，再改线上环境
-- 迁移完成前不要删除当前 CloudBase Run 服务
-
----
-
-## 10. 产品后续方向
-
-低成本优先级：
-
-### P0：先保证活动可用
-
-- PostgreSQL 持久化
-- 管理员正式登录或更安全的管理认证
-- 数据备份和恢复
-- 基本限流和防刷
-- 手机端真实测试
-- 错误提示和服务日志
-
-### P1：提升参与体验
-
-- 提案状态公开说明
-- 投票结束倒计时
-- 分享卡片和更好的视频引流文案
-- 提案搜索和筛选
-- 参与者昵称显示
-- 结果页和历史轮次页
-
-### P2：为成长做准备
-
-- 用户账号
-- owner / moderator / contributor / participant 角色
-- 多项目支持
-- GitHub / Gitee 代码协作入口
-- Issues / PR 关联
-- 图片上传
-- 更完整的审计日志
-
-暂时不要优先开发：
+暂时不要优先做：
 
 - 自建代码托管
 - 在线 IDE
 - 实时多人编辑
-- 视频上传平台
-- 复杂积分商城
-- 大量社交功能
+- 视频上传
+- 积分商城
+- 大型社交功能
 
 ---
 
-## 11. 成本策略
+## 11. 新对话开场提示词
 
-用户预算目标：尽量控制在每月 0–30 元。
-
-现阶段策略：
-
-- 使用 CloudBase 免费体验或最低个人版
-- CloudBase Run 最小实例配置
-- 自动缩容到 0
-- 最大实例数先设为 1
-- 不开自动续费
-- 不开超限不停服/按量付费，除非明确确认
-- 不上传视频
-- 图片后续做前端压缩
-- 先使用 CloudBase 默认域名
-- 有真实参与者后再考虑域名、备案和正式数据库配置
-
-腾讯云官方资料参考：
-
-```text
-https://tcb.cloud.tencent.com/dev
-https://docs.cloudbase.net/quick-start/create-env
-https://cloud.tencent.com/document/product/876/46901
-https://docs.cloudbase.net/run/deploy/deploy/introduce
-https://cloud.tencent.com/document/product/876/75213
-```
-
----
-
-## 12. 新对话开场提示词
-
-可以把下面这段直接发给新对话：
+新对话直接发送：
 
 ```text
 请先读取 C:\Users\l2104\flycode\Flycode-交接文档.md，然后继续推进 Flycode。
-不要重新创建项目、不要重新推送 Gitee、不要重复做已经完成的 MVP 功能。
-当前线上地址是：https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
-当前线上服务已验证首页、健康接口和管理员 401 正常。
-下一条主线是把当前 data/db.json 数据层迁移到已经创建的 CloudBase PostgreSQL，要求保留现有 API 和前端功能，先做备份、表设计、本机测试，再配置线上环境变量和重新部署。
-如果需要管理员密钥或数据库凭证，先明确告诉我需要哪一种，我会从腾讯云控制台提供；不要猜测或生成假的凭证。
-``` 
+
+项目已上线并已切换到 CloudBase PostgreSQL。
+线上地址：
+https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
+
+当前阶段是 voting，候选提案是“水印去除”。
+不要重新创建项目、不要删除 PostgreSQL 表、不要覆盖 flycode_state，也不要重复实现已有 MVP 功能。
+
+本机目录：C:\Users\l2104\flycode
+Gitee：https://gitee.com/nious101/flycode
+当前分支：master
+
+普通改动流程：修改 -> npm test -> 推送 Gitee -> CloudBase Run 手动点部署 -> 验证线上。
+任何 CloudBase API Key、管理员密钥或数据库密码都不能写入代码、Git、文档或聊天回复。
+```
