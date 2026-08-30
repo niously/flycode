@@ -9,6 +9,9 @@ const DATA_DIR = process.env.FLYCODE_DATA_DIR ? path.resolve(process.env.FLYCODE
 const DATA_FILE = path.join(DATA_DIR, 'db.json');
 const PORT = Number(process.env.PORT || 4173);
 const ADMIN_KEY = process.env.FLYCODE_ADMIN_KEY || 'flycode-local';
+const CLOUDBASE_ENV_ID = process.env.FLYCODE_CLOUDBASE_ENV_ID || 'flycode-d9gd8dv0xc55f8e85';
+const CLOUDBASE_API_KEY = process.env.FLYCODE_CLOUDBASE_API_KEY || '';
+const CLOUDBASE_SQL_URL = `https://${CLOUDBASE_ENV_ID}.api.tcloudbasegateway.com/v1/rdb/exec-pgsql`;
 
 if (process.env.NODE_ENV === 'production' && !process.env.FLYCODE_ADMIN_KEY) {
   throw new Error('生产环境必须设置 FLYCODE_ADMIN_KEY，不能使用默认管理密钥。');
@@ -100,6 +103,80 @@ function writeDb(db) {
   const tempFile = `${DATA_FILE}.tmp`;
   fs.writeFileSync(tempFile, JSON.stringify(db, null, 2));
   fs.renameSync(tempFile, DATA_FILE);
+}
+
+function parseCloudBaseSqlRows(payload) {
+  if (!Array.isArray(payload)) return [];
+  return payload;
+}
+
+async function queryCloudBaseSql(sql) {
+  if (!CLOUDBASE_API_KEY) throw new Error('CloudBase PostgreSQL 未配置服务端 API Key。');
+  const response = await fetch(CLOUDBASE_SQL_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${CLOUDBASE_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ sql, role: 'cloudbase_postgres' })
+  });
+  const text = await response.text();
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : [];
+  } catch {
+    payload = { message: text };
+  }
+  if (!response.ok) throw new Error(payload.message || payload.code || 'CloudBase PostgreSQL 请求失败。');
+  return parseCloudBaseSqlRows(payload);
+}
+
+function sqlLiteral(value) {
+  if (value === null || value === undefined) return 'NULL';
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+async function readPgDb() {
+  const rows = await queryCloudBaseSql("SELECT payload FROM public.flycode_state WHERE id = 'main'");
+  const payload = rows[0]?.payload;
+  if (!payload || typeof payload !== 'object') throw new Error('CloudBase PostgreSQL 中找不到 Flycode 状态。');
+  return normalizeDb(payload);
+}
+
+async function writePgDb(db) {
+  const payload = JSON.stringify(db);
+  await queryCloudBaseSql(
+    `INSERT INTO public.flycode_state(id,payload,updated_at) VALUES ('main',${sqlLiteral(payload)}::jsonb,CURRENT_TIMESTAMP) `
+    + 'ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload,updated_at=CURRENT_TIMESTAMP'
+  );
+}
+
+function normalizeDb(db) {
+  db.project ||= {};
+  db.phases = Array.isArray(db.phases) ? db.phases : [];
+  db.proposals = Array.isArray(db.proposals) ? db.proposals : [];
+  db.updates = Array.isArray(db.updates) ? db.updates : [];
+  db.votes ||= {};
+  for (const phase of db.phases) {
+    phase.candidates = Array.isArray(phase.candidates) ? phase.candidates : [];
+  }
+  return db;
+}
+
+async function readStore() {
+  return CLOUDBASE_API_KEY ? readPgDb() : readDb();
+}
+
+async function mutateStore(mutator) {
+  if (!CLOUDBASE_API_KEY) return mutateDb(mutator);
+  const operation = writeQueue.then(async () => {
+    const db = await readPgDb();
+    const result = mutator(db);
+    await writePgDb(db);
+    return result;
+  });
+  writeQueue = operation.catch(() => undefined);
+  return operation;
 }
 
 function mutateDb(mutator) {
@@ -303,17 +380,17 @@ async function handleApi(request, response, url) {
 
   if (request.method === 'GET' && url.pathname === '/api/state') {
     const visitorId = cleanText(request.headers['x-visitor-id'], 120);
-    return sendJson(response, 200, publicState(readDb(), visitorId));
+    return sendJson(response, 200, publicState(await readStore(), visitorId));
   }
 
   if (request.method === 'GET' && url.pathname === '/api/admin/state') {
     if (!requireAdmin(request, response)) return;
-    return sendJson(response, 200, adminState(readDb()));
+    return sendJson(response, 200, adminState(await readStore()));
   }
 
   if (request.method === 'GET' && url.pathname === '/api/admin/export') {
     if (!requireAdmin(request, response)) return;
-    return sendJson(response, 200, readDb());
+    return sendJson(response, 200, await readStore());
   }
 
   let body;
@@ -345,7 +422,7 @@ async function handleApi(request, response, url) {
     if (body.link && !link) return sendJson(response, 400, { error: '参考链接需要以 http:// 或 https:// 开头。' });
 
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         const phase = currentPhase(db);
         if (!phase || phase.status !== 'submitting') throw new Error('当前阶段暂未开放提案。');
         const proposal = {
@@ -373,7 +450,7 @@ async function handleApi(request, response, url) {
     const visitorId = cleanText(body.visitorId, 120);
     if (!proposalId || !visitorId) return sendJson(response, 400, { error: '缺少投票信息。' });
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         const phase = currentPhase(db);
         if (!phase || phase.status !== 'voting') throw new Error('当前还没有开放投票。');
         const proposal = db.proposals.find((item) => item.id === proposalId);
@@ -399,7 +476,7 @@ async function handleApi(request, response, url) {
       return sendJson(response, 400, { error: '批量操作参数无效。' });
     }
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         const selected = db.proposals.filter((proposal) => ids.includes(proposal.id));
         if (selected.length !== ids.length) throw new Error('部分提案不存在，请刷新后重试。');
         if (action === 'delete') {
@@ -436,7 +513,7 @@ async function handleApi(request, response, url) {
     const status = cleanText(body.status, 20);
     if (!proposalStatuses.has(status)) return sendJson(response, 400, { error: '无效的提案状态。' });
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         const proposal = db.proposals.find((item) => item.id === proposalId);
         if (!proposal) throw new Error('找不到这个提案。');
         assertProposalMutable(db, [proposal]);
@@ -458,7 +535,7 @@ async function handleApi(request, response, url) {
     const status = cleanText(body.status, 20);
     if (!phaseStatuses.has(status)) return sendJson(response, 400, { error: '无效的阶段状态。' });
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         const phase = currentPhase(db);
         if (!phase) throw new Error('找不到当前阶段。');
         if (!validPhaseTransition(phase.status, status)) {
@@ -485,7 +562,7 @@ async function handleApi(request, response, url) {
     const proposalId = cleanText(body.proposalId, 100);
     const note = cleanText(body.note, 800);
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         const phase = currentPhase(db);
         const proposal = db.proposals.find((item) => item.id === proposalId);
         if (!phase || phase.status !== 'voting') throw new Error('只有投票阶段才能公布决定。');
@@ -515,7 +592,7 @@ async function handleApi(request, response, url) {
     const content = cleanText(body.body, 1200);
     if (title.length < 2 || content.length < 5) return sendJson(response, 400, { error: '请填写更新标题和内容。' });
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         db.updates.push({ id: makeId('update'), title, body: content, createdAt: now() });
         return adminState(db);
       });
@@ -532,7 +609,7 @@ async function handleApi(request, response, url) {
     const deadline = cleanText(body.deadline, 30) || null;
     if (title.length < 2 || question.length < 5) return sendJson(response, 400, { error: '请填写新阶段标题和问题。' });
     try {
-      const state = await mutateDb((db) => {
+      const state = await mutateStore((db) => {
         const oldPhase = currentPhase(db);
         if (oldPhase && oldPhase.status !== 'archived') oldPhase.status = 'archived';
         const nextNumber = Math.max(0, ...db.phases.map((phase) => phase.number)) + 1;
