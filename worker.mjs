@@ -17,6 +17,12 @@ export default {
       return jsonError('请求地址无效。', 400);
     }
 
+    if (incomingUrl.pathname === '/__health') {
+      return new Response(JSON.stringify({ ok: true, service: 'flycode-edge' }), {
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
+      });
+    }
+
     const targetUrl = `${origin}${incomingUrl.pathname}${incomingUrl.search}`;
     const headers = new Headers(request.headers);
     headers.delete('host');
