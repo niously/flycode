@@ -322,6 +322,21 @@ function sendText(response, statusCode, body, contentType = 'text/plain; charset
   response.end(body);
 }
 
+function sendBackup(response, backup) {
+  const body = JSON.stringify(backup, null, 2);
+  const date = backup.exportedAt.slice(0, 10);
+  response.writeHead(200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Disposition': `attachment; filename=\"flycode-backup-${date}.json\"`,
+    'Content-Length': Buffer.byteLength(body),
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'same-origin'
+  });
+  response.end(body);
+}
+
 function getClientIp(request) {
   return request.headers['x-forwarded-for']?.split(',')[0].trim() || request.socket.remoteAddress || 'local';
 }
@@ -391,6 +406,16 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/admin/export') {
     if (!requireAdmin(request, response)) return;
     return sendJson(response, 200, await readStore());
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/admin/backup') {
+    if (!requireAdmin(request, response)) return;
+    return sendBackup(response, {
+      format: 'flycode-backup',
+      version: 1,
+      exportedAt: now(),
+      data: await readStore()
+    });
   }
 
   let body;

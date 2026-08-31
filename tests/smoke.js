@@ -257,6 +257,18 @@ async function run() {
   assert.equal(exported.status, 200);
   assert.equal(exported.body.proposals.length, 1);
 
+  const unauthorizedBackup = await request('/api/admin/backup');
+  assert.equal(unauthorizedBackup.status, 401);
+
+  const backup = await request('/api/admin/backup', { headers: adminHeaders });
+  assert.equal(backup.status, 200);
+  assert.match(backup.headers.get('content-disposition') || '', /^attachment; filename="flycode-backup-20\d\d-\d\d-\d\d\.json"$/);
+  assert.equal(backup.body.format, 'flycode-backup');
+  assert.equal(backup.body.version, 1);
+  assert.ok(Number.isFinite(Date.parse(backup.body.exportedAt)));
+  assert.equal(backup.body.exportedAt.endsWith('Z'), true);
+  assert.equal(backup.body.data.proposals.length, 1);
+
   console.log('PASS: isolated Flycode smoke checks');
 }
 

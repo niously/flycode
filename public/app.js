@@ -648,12 +648,12 @@ async function createPhase(event) {
 }
 
 function exportProjectData() {
-  api('/api/admin/export', { headers: { 'X-Admin-Key': state.adminKey } }).then((data) => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  api('/api/admin/backup', { headers: { 'X-Admin-Key': state.adminKey } }).then((backup) => {
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `flycode-export-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `flycode-backup-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
     showToast('项目数据已导出。');
