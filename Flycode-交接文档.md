@@ -26,28 +26,55 @@ Flycode 是一个由网友参与定制和发展的共创网站。
 
 ## 2. 当前线上状态
 
-线上地址：
+当前公开入口：
+
+```text
+https://flycode.online
+```
+
+CloudBase 原始地址（保留为后端和故障排查入口，不作为对外主入口）：
 
 ```text
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
 ```
 
-健康检查：
+公开入口健康检查：
+
+```text
+https://flycode.online/__health
+https://flycode.online/api/health
+https://flycode.online/api/state
+```
+
+CloudBase 原始健康检查：
 
 ```text
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health
 ```
 
-2026-08-31 已实际验证：
+2026-08-31 已从外部实际验证：
 
 ```text
-首页正常
-/api/health: HTTP 200
-/api/state: HTTP 200
+https://flycode.online/: HTTP 200，返回 Flycode 首页
+https://flycode.online/__health: HTTP 200，返回 flycode-edge
+https://flycode.online/api/health: HTTP 200，返回 flycode
+https://flycode.online/api/state: HTTP 200，返回当前 PostgreSQL 数据
 新版 voting 字段存在
 新版 candidateProposals 字段存在
 PostgreSQL 持久化已启用
 ```
+
+当前访问链路：
+
+```text
+flycode.online
+-> Cloudflare DNS（venkat.ns.cloudflare.com / becky.ns.cloudflare.com）
+-> Cloudflare Worker（flycode，路由 flycode.online/*）
+-> CloudBase 云托管
+-> CloudBase PostgreSQL
+```
+
+Cloudflare 免费套餐已启用。域名由 Spaceship 注册；DNS 已委托给 Cloudflare，因此后续 DNS 记录和路由在 Cloudflare 管理，不要在 Spaceship 将名称服务器改回去。
 
 当前活动数据以线上 `/api/state` 实时返回为准。最近已验证保留：
 
@@ -103,7 +130,7 @@ PostgreSQL 持久化已启用
 - 评论、私信、关注
 - 完整反刷和风控系统
 - 自动部署（当前仍需控制台手动点部署）
-- 正式域名、ICP备案和稳定的中国大陆公开访问入口
+- ICP 备案和以 CloudBase 自定义域名直连的正式大陆合规入口
 
 ---
 
@@ -156,7 +183,9 @@ server.js                              Node.js 后端和 API
 public/index.html                      页面结构
 public/styles.css                      页面样式
 public/app.js                          前端逻辑
-worker.mjs                              Cloudflare Worker 代理入口，仅作访问链路实验
+public/icons/flycode-icon-light.png    浅色背景图标
+public/icons/flycode-icon-dark.png     深色背景图标
+worker.mjs                             Cloudflare Worker 代理入口，仅作访问链路实验
 wrangler.toml                           Cloudflare Worker 配置
 tests/worker-proxy.js                   Worker 转发行为测试
 tests/edge-health.js                    Worker 本地健康探针测试
@@ -164,7 +193,7 @@ package.json                           npm 配置
 package-lock.json                      固定依赖版本
 Dockerfile                             CloudBase Run 构建配置
 .dockerignore                          发布排除规则
-db-schema.sql                          PostgreSQL 表结构
+db-schema.sql                           PostgreSQL 表结构
 scripts/migrate-json-to-postgres.js    JSON 到 PostgreSQL 导入工具
 data/db.json                           本机 JSON 回退数据，仅本机测试
 tests/smoke.js                         隔离式自动测试
@@ -368,31 +397,35 @@ Git 仓库：https://gitee.com/nious101/flycode.git
 
 当前尚未配置自动部署。
 
-### Cloudflare Worker 实验状态：已部署，不是正式入口
+### Cloudflare Worker 和 flycode.online：已部署并可用
 
-Cloudflare Worker 已部署，地址为：
-
-```text
-https://flycode.ccgo.workers.dev
-```
-
-Worker 代码只是将请求代理到现有 CloudBase 云托管服务：
+Cloudflare Worker 名称：
 
 ```text
-Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreSQL
+flycode
 ```
+
+Worker 将请求代理到现有 CloudBase 云托管服务：
+
+```text
+flycode.online -> Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreSQL
+```
+
+当前 Worker 路由：
+
+```text
+flycode.online/*
+```
+
+不要误配为 `*.flycode.online/*`：该模式用于更深一层的子域名，不能替代主入口 `flycode.online/*`。
 
 Worker 诊断接口：
 
 ```text
-https://flycode.ccgo.workers.dev/__health
+https://flycode.online/__health
 ```
 
-已验证事实：Worker 部署、外部请求和 CloudBase 后端请求都曾返回成功；Cloudflare Analytics 曾记录 `200` 子请求，平均后端响应约 1.2 秒，Worker 错误为 0。
-
-但用户实测在中国大陆手机网络上访问 `workers.dev` 地址会发生超时，且部分超时请求没有进入 Worker 调用统计。因此它当前不能作为 Flycode 的稳定公开入口。不要把 Worker 部署成功误报为网站已经稳定上线；也不要删除现有 CloudBase 服务或数据库。
-
-Cloudflare 自定义域名可能改善 `workers.dev` 平台子域名入口，但无法保证解决中国大陆到 Cloudflare 网络或 Cloudflare 到 CloudBase 的链路问题。未完成手机实测前，不要为此假定购买域名即可解决。
+已验证事实：新域名的首页、Worker 健康检查、CloudBase 后端健康检查和状态 API 均为 HTTP 200。此前 `https://flycode.ccgo.workers.dev` 在中国大陆手机网络及当前外部检查中超时，不能再作为公开地址；新域名已实际通过外部检查，但仍需用户用中国大陆手机 Wi-Fi 和手机流量分别打开 `https://flycode.online`，作为目标网络验收证据。
 
 ### GitHub 镜像仓库
 
@@ -419,9 +452,9 @@ GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、
 - `flycode_state` 当前在服务进程内使用写入队列，单实例适合小范围测试；多实例正式扩容前应完成数据库原子更新/行锁改造。
 - 访客身份当前是浏览器生成的 `visitorId`，不是正式账号系统；重复投票拦截主要针对同一浏览器。
 - 管理入口仍是共享管理员密钥，不是正式登录系统。
-- 默认 CloudBase 域名适合测试；中国大陆长期正式公开应准备备案域名。
-- 当前 CloudBase 测试域名已出现风险提醒和访问量上限中间页，正式域名应在公开传播前绑定并验证。
-- 当前 Cloudflare `workers.dev` 免费地址在用户实际中国大陆手机网络上不稳定，不是可靠的正式入口；不能仅依据外部探测成功或 Worker 部署成功判断用户可访问。
+- 默认 CloudBase 域名适合测试，仍可能出现风险提醒和访问量限制；它已保留为后端与排查入口，不应作为对外主入口。
+- `flycode.online` 已接入 Cloudflare 并通过外部 HTTP 验证，但尚缺少中国大陆手机 Wi-Fi 与手机流量的人工验收；不能在这两项实测前承诺所有大陆网络稳定。
+- `flycode.ccgo.workers.dev` 在中国大陆手机网络和当前外部探测中均不稳定，不能重新作为公开入口。
 - Flycode 是动态网站：投稿、审核、投票、管理员接口依赖 `server.js` 和 PostgreSQL；静态托管只能承载页面，不能单独替代当前后端。
 - 当前 Worker 流程不是后端迁移，只是 Cloudflare 到 CloudBase 云托管的代理。CloudBase 后端是云托管容器服务，不是普通云函数。
 - 不要大规模宣传前再开启多实例或复杂社交功能。
@@ -433,11 +466,11 @@ GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、
 当前优先顺序：
 
 1. 保留 CloudBase 云托管和 PostgreSQL 作为真实后端与数据源；不要删除、覆盖 `flycode_state` 或迁移前清空数据。
-2. 将 Render 作为低风险线路对照测试：它可直接运行当前 Docker/Node 后端，不需要重写 API。仅选择 `Singapore`、`Free`、`$0/month`，不创建 Render Postgres、不选付费实例；若账号仍强制绑卡且无法绑定，立即停止该路线。
-3. Render 不可用或手机访问仍不稳定后，测试腾讯 EdgeOne Makers。它支持 Gitee/GitHub、静态页面、Edge Functions、Cloud Functions 和免费 SSL；但默认项目/部署地址在中国大陆可能要求 3 小时预览链接，且当前 `server.js` 不能原样作为静态项目部署。
-4. 只有验证某个平台的免费测试地址能在手机 Wi-Fi 和手机流量稳定打开后，才讨论购买正式域名。域名不是网络稳定性的保证。
-5. 若最终面向中国大陆长期公开，优先确认 CloudBase 环境的「备案管理」是否可直接备案。当前资料提示符合个人版以上、有效期大于 6 个月、开启云托管固定 IP 的环境可作为备案资源；以控制台实际可见入口为准。不要未经确认购买 CVM。
-6. 选定稳定入口后，完整验收首页、`/api/health`、投稿、管理员登录、审核、投票、撤回投票、重新投票和数据持久化。
+2. 用户用中国大陆手机 Wi-Fi 和手机流量分别打开 `https://flycode.online`，确认首页能加载、投稿能提交；同时观察是否有超时或风险提示。该步骤决定是否可将新域名作为稳定公开入口。
+3. 更新页面分享元数据：`public/index.html` 中的 `og:url` 目前还是占位地址 `https://flycode.community/`，应改为 `https://flycode.online/`。改后执行 `npm test`、推送仓库、在 CloudBase Run 手动部署，再验证线上页面。
+4. 在新入口完整验收首页、`/__health`、`/api/health`、投稿、管理员登录、审核、投票、撤回投票、重新投票和 PostgreSQL 数据持久化。
+5. 若新域名在目标网络仍不稳定，再将 Render 或腾讯 EdgeOne Makers 作为对照路线；不要在尚未定位失败环节时盲目更换后端或购买更多服务。
+6. 若最终面向中国大陆长期公开，确认 CloudBase 环境的「备案管理」是否可直接备案。以控制台实际可见入口为准，不要未经确认购买 CVM。
 7. 有陌生网友持续参与后，再补管理员账号、自动备份、限流/防刷、隐私与投稿规则和更可靠的投票身份。
 8. 最后逐步把 PostgreSQL JSONB 快照升级为关系表细粒度读写。
 
@@ -460,8 +493,13 @@ GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、
 请先读取 C:\Users\l2104\flycode\Flycode-交接文档.md，然后继续推进 Flycode。
 
 项目已上线并已切换到 CloudBase PostgreSQL。
-线上地址：
+当前公开入口：https://flycode.online
+CloudBase 原始地址（后端与排查入口）：
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
+
+访问链路：flycode.online -> Cloudflare Worker（flycode，路由 flycode.online/*）-> CloudBase 云托管 -> CloudBase PostgreSQL。
+Cloudflare DNS 名称服务器：venkat.ns.cloudflare.com / becky.ns.cloudflare.com；不要在 Spaceship 改回去。
+先通过 https://flycode.online/api/state 确认线上状态；同时区分外部 HTTP 成功与用户中国大陆手机 Wi-Fi/流量实测，后者尚需确认。
 
 当前活动状态必须先通过线上 `/api/state` 确认；最近状态是 submitting（提案收集中），已公开提案为“水印去除”。
 不要重新创建项目、不要删除 PostgreSQL 表、不要覆盖 flycode_state，也不要重复实现已有 MVP 功能。
