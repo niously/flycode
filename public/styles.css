@@ -175,6 +175,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .small-textarea { min-height: 84px; }
 .full-width { width: 100%; margin-top: 16px; }
 .form-note { margin: 5px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.submission-guidance { margin-top: 12px; border-top: 1px solid var(--line); }
+.submission-guidance details { border-bottom: 1px solid var(--line); }
+.submission-guidance summary { display: flex; align-items: center; justify-content: space-between; min-height: 40px; color: var(--ink); font-size: 11px; font-weight: 700; cursor: pointer; list-style: none; }
+.submission-guidance summary::-webkit-details-marker { display: none; }
+.submission-guidance summary::after { content: "+"; color: var(--coral); font-family: var(--font-mono); font-size: 16px; font-weight: 400; }
+.submission-guidance details[open] summary::after { content: "-"; }
+.submission-guidance details p { max-width: 560px; margin: 0 0 13px; color: var(--muted); font-size: 11px; line-height: 1.7; }
 .form-message { min-height: 20px; margin: 5px 0 0; color: var(--green); font-size: 11px; }
 .form-message.error { color: #b3392c; }
 .honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0; }

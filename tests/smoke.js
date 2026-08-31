@@ -125,6 +125,8 @@ async function run() {
   assert.equal(home.status, 200);
   assert.match(home.headers.get('content-type') || '', /^text\/html/);
   assert.match(home.text, /<title>Flycode/);
+  assert.match(home.text, /投稿须知/);
+  assert.match(home.text, /隐私说明/);
   assert.equal(home.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(home.headers.get('x-frame-options'), 'DENY');
 
