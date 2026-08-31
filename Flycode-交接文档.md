@@ -1,7 +1,7 @@
 # Flycode 项目交接文档
 
 > 用途：在新对话中直接恢复 Flycode 项目上下文。
-> 更新时间：2026-08-30
+> 更新时间：2026-08-31
 > 项目负责人：用户本人（发起人、初期维护者和最终决策者）
 
 ---
@@ -38,7 +38,7 @@ https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health
 ```
 
-2026-08-30 已实际验证：
+2026-08-31 已实际验证：
 
 ```text
 首页正常
@@ -49,17 +49,16 @@ https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health
 PostgreSQL 持久化已启用
 ```
 
-当前活动数据：
+当前活动数据以线上 `/api/state` 实时返回为准。最近已验证保留：
 
 ```text
-当前阶段：voting（投票中）
+当前阶段：submitting（提案收集中）
 公开提案：1
-候选提案：水印去除
-候选提案 ID：proposal-mtfgm3f1-c88189
+公开提案：水印去除
 成长记录：1
 ```
 
-当前访客可以为“水印去除”投票；发起人可以在管理工作台选择该候选并公布决定。
+“水印去除”目前保留为已公开提案；管理者可继续审核、重新开启投票，或在投票阶段撤回后重新审核。
 
 ---
 
@@ -85,6 +84,7 @@ PostgreSQL 持久化已启用
 - 管理工作台手动刷新按钮
 - 投票阶段撤回并回到重新审核：候选提案退回待审核，历史票数清零，可重新开启投票
 - 独立 Flycode SVG 图标，已接入浏览器标签、手机收藏图标和页首品牌标记
+- Cloudflare Worker 代理适配层和独立 `/__health` 诊断接口
 - 中文请求体 UTF-8 安全处理，避免网络分块导致乱码
 - 基本安全响应头
 - 生产环境禁止默认管理员密钥
@@ -103,6 +103,7 @@ PostgreSQL 持久化已启用
 - 评论、私信、关注
 - 完整反刷和风控系统
 - 自动部署（当前仍需控制台手动点部署）
+- 正式域名、ICP备案和稳定的中国大陆公开访问入口
 
 ---
 
@@ -135,16 +136,17 @@ master
 当前最新提交：
 
 ```text
-1390aba Add vote withdrawal and refresh Flycode branding
+9be2be7 Add edge health probe for Worker diagnostics
 ```
 
 最近关键提交：
 
 ```text
+9be2be7 Add edge health probe for Worker diagnostics
+052db48 Add Cloudflare Worker proxy deployment
+52e0297 Use server vote state after withdrawal
 1390aba Add vote withdrawal and refresh Flycode branding
 79c8f35 Connect Flycode backend to CloudBase PostgreSQL
-05165f5 Support CloudBase PostgreSQL connection fields
-3b9638a Fix voting flow and prepare PostgreSQL migration
 ```
 
 主要文件：
@@ -154,6 +156,10 @@ server.js                              Node.js 后端和 API
 public/index.html                      页面结构
 public/styles.css                      页面样式
 public/app.js                          前端逻辑
+worker.mjs                              Cloudflare Worker 代理入口，仅作访问链路实验
+wrangler.toml                           Cloudflare Worker 配置
+tests/worker-proxy.js                   Worker 转发行为测试
+tests/edge-health.js                    Worker 本地健康探针测试
 package.json                           npm 配置
 package-lock.json                      固定依赖版本
 Dockerfile                             CloudBase Run 构建配置
@@ -362,6 +368,48 @@ Git 仓库：https://gitee.com/nious101/flycode.git
 
 当前尚未配置自动部署。
 
+### Cloudflare Worker 实验状态：已部署，不是正式入口
+
+Cloudflare Worker 已部署，地址为：
+
+```text
+https://flycode.ccgo.workers.dev
+```
+
+Worker 代码只是将请求代理到现有 CloudBase 云托管服务：
+
+```text
+Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreSQL
+```
+
+Worker 诊断接口：
+
+```text
+https://flycode.ccgo.workers.dev/__health
+```
+
+已验证事实：Worker 部署、外部请求和 CloudBase 后端请求都曾返回成功；Cloudflare Analytics 曾记录 `200` 子请求，平均后端响应约 1.2 秒，Worker 错误为 0。
+
+但用户实测在中国大陆手机网络上访问 `workers.dev` 地址会发生超时，且部分超时请求没有进入 Worker 调用统计。因此它当前不能作为 Flycode 的稳定公开入口。不要把 Worker 部署成功误报为网站已经稳定上线；也不要删除现有 CloudBase 服务或数据库。
+
+Cloudflare 自定义域名可能改善 `workers.dev` 平台子域名入口，但无法保证解决中国大陆到 Cloudflare 网络或 Cloudflare 到 CloudBase 的链路问题。未完成手机实测前，不要为此假定购买域名即可解决。
+
+### GitHub 镜像仓库
+
+为支持外部托管平台部署，项目已同步到：
+
+```text
+https://github.com/niously/flycode
+```
+
+当前 `master` 与 Gitee `master` 均已确认指向：
+
+```text
+9be2be7 Add edge health probe for Worker diagnostics
+```
+
+GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、本机 `data/db.json` 或发布压缩包。
+
 ---
 
 ## 9. 重要已知限制和风险
@@ -373,21 +421,25 @@ Git 仓库：https://gitee.com/nious101/flycode.git
 - 管理入口仍是共享管理员密钥，不是正式登录系统。
 - 默认 CloudBase 域名适合测试；中国大陆长期正式公开应准备备案域名。
 - 当前 CloudBase 测试域名已出现风险提醒和访问量上限中间页，正式域名应在公开传播前绑定并验证。
+- 当前 Cloudflare `workers.dev` 免费地址在用户实际中国大陆手机网络上不稳定，不是可靠的正式入口；不能仅依据外部探测成功或 Worker 部署成功判断用户可访问。
+- Flycode 是动态网站：投稿、审核、投票、管理员接口依赖 `server.js` 和 PostgreSQL；静态托管只能承载页面，不能单独替代当前后端。
+- 当前 Worker 流程不是后端迁移，只是 Cloudflare 到 CloudBase 云托管的代理。CloudBase 后端是云托管容器服务，不是普通云函数。
 - 不要大规模宣传前再开启多实例或复杂社交功能。
 
 ---
 
 ## 10. 下一步建议
 
-当前在线阶段已经是投票中，优先顺序：
+当前优先顺序：
 
-1. 先决定正式域名，并在腾讯云完成备案/解析准备；不要先停用当前 CloudBase 地址。
-2. 在 CloudBase Run 为服务绑定自定义域名，验证 HTTPS、首页、`/api/health` 和管理入口。
-3. 在手机和不同浏览器实际测试“水印去除”投票；发现候选或说明有误时使用“撤回投票，重新审核”。
-4. 通过管理工作台查看票数，选择候选并公布决定。
-5. 发布一条执行进展，保留完整成长记录；完成本轮后归档并创建下一轮问题。
-6. 若开始有陌生网友持续参与，优先补管理员登录、备份、限流和更可靠的投票身份。
-7. 再把 PostgreSQL 快照存储逐步升级为关系表的细粒度读写。
+1. 保留 CloudBase 云托管和 PostgreSQL 作为真实后端与数据源；不要删除、覆盖 `flycode_state` 或迁移前清空数据。
+2. 将 Render 作为低风险线路对照测试：它可直接运行当前 Docker/Node 后端，不需要重写 API。仅选择 `Singapore`、`Free`、`$0/month`，不创建 Render Postgres、不选付费实例；若账号仍强制绑卡且无法绑定，立即停止该路线。
+3. Render 不可用或手机访问仍不稳定后，测试腾讯 EdgeOne Makers。它支持 Gitee/GitHub、静态页面、Edge Functions、Cloud Functions 和免费 SSL；但默认项目/部署地址在中国大陆可能要求 3 小时预览链接，且当前 `server.js` 不能原样作为静态项目部署。
+4. 只有验证某个平台的免费测试地址能在手机 Wi-Fi 和手机流量稳定打开后，才讨论购买正式域名。域名不是网络稳定性的保证。
+5. 若最终面向中国大陆长期公开，优先确认 CloudBase 环境的「备案管理」是否可直接备案。当前资料提示符合个人版以上、有效期大于 6 个月、开启云托管固定 IP 的环境可作为备案资源；以控制台实际可见入口为准。不要未经确认购买 CVM。
+6. 选定稳定入口后，完整验收首页、`/api/health`、投稿、管理员登录、审核、投票、撤回投票、重新投票和数据持久化。
+7. 有陌生网友持续参与后，再补管理员账号、自动备份、限流/防刷、隐私与投稿规则和更可靠的投票身份。
+8. 最后逐步把 PostgreSQL JSONB 快照升级为关系表细粒度读写。
 
 暂时不要优先做：
 
@@ -411,7 +463,7 @@ Git 仓库：https://gitee.com/nious101/flycode.git
 线上地址：
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
 
-当前阶段是 voting，候选提案是“水印去除”。
+当前活动状态必须先通过线上 `/api/state` 确认；最近状态是 submitting（提案收集中），已公开提案为“水印去除”。
 不要重新创建项目、不要删除 PostgreSQL 表、不要覆盖 flycode_state，也不要重复实现已有 MVP 功能。
 
 本机目录：C:\Users\l2104\flycode
