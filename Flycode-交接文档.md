@@ -161,21 +161,25 @@ git@gitee.com:nious101/flycode.git
 master
 ```
 
-当前最新提交：
+当前最新提交（2026-08-31 已逐一核对本机、Gitee 和 GitHub 的 `master` 一致）：
 
 ```text
-9be2be7 Add edge health probe for Worker diagnostics
+ef25815 [verified] Revert spoofable admin lockout
 ```
 
 最近关键提交：
 
 ```text
+ef25815 [verified] Revert spoofable admin lockout
+26804db [verified] Add submission and privacy guidance
+a6fbdcc [verified] Add admin backup download
+2ebe06a Update Flycode branding assets
 9be2be7 Add edge health probe for Worker diagnostics
 052db48 Add Cloudflare Worker proxy deployment
-52e0297 Use server vote state after withdrawal
-1390aba Add vote withdrawal and refresh Flycode branding
 79c8f35 Connect Flycode backend to CloudBase PostgreSQL
 ```
+
+`a7697e4` 曾尝试按请求来源对管理员连续输错进行锁定；其不可靠部分已由 `ef25815` 撤回，不能重新部署该中间版本。
 
 主要文件：
 
@@ -436,11 +440,13 @@ https://flycode.online/__health
 https://github.com/niously/flycode
 ```
 
-当前 `master` 与 Gitee `master` 均已确认指向：
+当前 GitHub `master` 与 Gitee `master` 均已确认指向：
 
 ```text
-9be2be7 Add edge health probe for Worker diagnostics
+ef258157db782f25f40d9749d3c47469c62d2ca4
 ```
+
+即 `ef25815 [verified] Revert spoofable admin lockout`。这说明两个代码仓库已同步；它本身不代表 CloudBase 已部署该提交。
 
 GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、本机 `data/db.json` 或发布压缩包。
 
@@ -469,7 +475,7 @@ GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、
 
 1. 保留 CloudBase 云托管和 PostgreSQL 作为真实后端与数据源；不要删除、覆盖 `flycode_state` 或迁移前清空数据。
 2. 用户用中国大陆手机 Wi-Fi 和手机流量分别打开 `https://flycode.online`，确认首页能加载、投稿能提交；同时观察是否有超时或风险提示。该步骤决定是否可将新域名作为稳定公开入口。
-3. 更新页面分享元数据：`public/index.html` 中的 `og:url` 目前还是占位地址 `https://flycode.community/`，应改为 `https://flycode.online/`。改后执行 `npm test`、推送仓库、在 CloudBase Run 手动部署，再验证线上页面。
+3. 页面分享元数据已修正：源码和本次实际返回的线上 HTML 均为 `og:url=https://flycode.online/`。当前接口不会返回部署提交号，因此不能仅凭页面可用就声称 CloudBase 已运行 `ef25815`；下次有需要上线的业务改动时，仍须在 CloudBase Run 手动部署并按具体功能验收。
 4. 在新入口完整验收首页、`/__health`、`/api/health`、投稿、管理员登录、审核、投票、撤回投票、重新投票和 PostgreSQL 数据持久化。
 5. 若新域名在目标网络仍不稳定，再将 Render 或腾讯 EdgeOne Makers 作为对照路线；不要在尚未定位失败环节时盲目更换后端或购买更多服务。
 6. 若最终面向中国大陆长期公开，确认 CloudBase 环境的「备案管理」是否可直接备案。以控制台实际可见入口为准，不要未经确认购买 CVM。
@@ -503,12 +509,13 @@ https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
 Cloudflare DNS 名称服务器：venkat.ns.cloudflare.com / becky.ns.cloudflare.com；不要在 Spaceship 改回去。
 先通过 https://flycode.online/api/state 确认线上状态；同时区分外部 HTTP 成功与用户中国大陆手机 Wi-Fi/流量实测，后者尚需确认。
 
-当前活动状态必须先通过线上 `/api/state` 确认；最近状态是 submitting（提案收集中），已公开提案为“水印去除”。
+当前活动状态必须先通过线上 `/api/state` 确认；2026-08-31 最近实测状态是 submitting（提案收集中），提案数为 1，标题为“水印去除”，成长记录数为 1。
 不要重新创建项目、不要删除 PostgreSQL 表、不要覆盖 flycode_state，也不要重复实现已有 MVP 功能。
 
 本机目录：C:\Users\l2104\flycode
 Gitee：https://gitee.com/nious101/flycode
 当前分支：master
+本机、Gitee、GitHub 已同步到：ef258157db782f25f40d9749d3c47469c62d2ca4；CloudBase 实际部署提交无法通过当前公开接口识别，不能把仓库同步误报为线上部署。
 
 普通改动流程：修改 -> npm test -> 推送 Gitee -> CloudBase Run 手动点部署 -> 验证线上。
 任何 CloudBase API Key、管理员密钥或数据库密码都不能写入代码、Git、文档或聊天回复。
