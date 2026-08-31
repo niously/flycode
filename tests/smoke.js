@@ -10,6 +10,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flycode-test-'));
 const port = Number(process.env.FLYCODE_TEST_PORT || 43000 + Math.floor(Math.random() * 1000));
 const baseUrl = `http://127.0.0.1:${port}`;
 const adminKey = `test-admin-${Date.now().toString(36)}`;
+const releaseId = '0123456789abcdef0123456789abcdef01234567';
 const adminHeaders = { 'X-Admin-Key': adminKey };
 let serverProcess;
 let serverOutput = '';
@@ -93,6 +94,7 @@ function startServer() {
       NODE_ENV: 'test',
       PORT: String(port),
       FLYCODE_ADMIN_KEY: adminKey,
+      FLYCODE_RELEASE_ID: releaseId,
       FLYCODE_DATA_DIR: dataDir
     },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -120,6 +122,8 @@ async function run() {
   const health = await request('/api/health');
   assert.equal(health.status, 200);
   assert.equal(health.body.ok, true);
+  assert.equal(health.body.service, 'flycode');
+  assert.equal(health.body.release, releaseId);
 
   const home = await request('/');
   assert.equal(home.status, 200);

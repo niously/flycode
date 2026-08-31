@@ -26,7 +26,17 @@ npm start
 
 然后用浏览器打开 <http://localhost:4173>。
 
-当前版本适合本机或局域网测试。正式公开需要把服务和数据迁移到云端数据库。
+当前版本适合本机或局域网测试。正式公开部署使用 CloudBase Run 和 CloudBase PostgreSQL；具体线上链路与维护步骤见 `Flycode-交接文档.md`。
+
+## 部署版本核验
+
+部署到 CloudBase Run 时，为服务添加一个非敏感环境变量。先在项目目录执行 `git rev-parse HEAD`，再将完整输出填入：
+
+```text
+FLYCODE_RELEASE_ID=<git rev-parse HEAD 的完整输出>
+```
+
+部署完成后访问 `/api/health`。返回 JSON 中的 `release` 应与该 SHA 完全一致；返回 `unknown` 表示这次服务未设置该变量。该值只用于确认线上实际运行的代码版本，不能代替管理员密钥或数据库密钥。
 
 ## 自动测试
 

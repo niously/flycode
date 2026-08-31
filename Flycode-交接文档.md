@@ -116,6 +116,7 @@ Cloudflare 免费套餐已启用。域名由 Spaceship 注册；DNS 已委托给
 - 中文请求体 UTF-8 安全处理，避免网络分块导致乱码
 - 基本安全响应头
 - 生产环境禁止默认管理员密钥
+- `/api/health` 返回非敏感的部署标识 `release`，可核验 CloudBase 实际构建版本
 - SIGTERM 优雅退出
 - CloudBase Run Dockerfile
 - JSON 本机回退模式
@@ -161,11 +162,15 @@ git@gitee.com:nious101/flycode.git
 master
 ```
 
-当前最新提交（2026-08-31 已逐一核对本机、Gitee 和 GitHub 的 `master` 一致）：
+提交状态以实时 Git 命令核验：
 
-```text
-ef25815 [verified] Revert spoofable admin lockout
+```bash
+git rev-parse HEAD
+git ls-remote origin refs/heads/master
+git ls-remote github refs/heads/master
 ```
+
+三项完整 SHA 相同，才可称本机、Gitee 和 GitHub 已同步。
 
 最近关键提交：
 
@@ -287,6 +292,7 @@ PORT=8080
 FLYCODE_DATA_DIR=/data
 FLYCODE_ADMIN_KEY=（生产管理员密钥）
 FLYCODE_CLOUDBASE_API_KEY=（CloudBase PostgreSQL 服务端 API Key）
+FLYCODE_RELEASE_ID=（本次部署前执行 git rev-parse HEAD 得到的完整 SHA）
 ```
 
 可选但推荐显式配置：
@@ -307,6 +313,7 @@ X-Admin-Key: <生产管理员密钥>
 ```
 
 - 如果重新生成 CloudBase API Key，只需在 CloudBase Run 环境变量中替换 `FLYCODE_CLOUDBASE_API_KEY` 后重新部署，不需要改代码。
+- 每次准备部署代码时，执行 `git rev-parse HEAD`，把完整输出填入 `FLYCODE_RELEASE_ID`。部署完成后访问 `/api/health`，返回的 `release` 必须与该 SHA 一致；若为 `unknown` 或不一致，说明线上运行的不是已确认的构建版本。该值只用于版本核验，不是密钥。
 
 ---
 
@@ -360,8 +367,9 @@ flycode-local
 提出需求
 -> 助手修改和测试
 -> 助手推送 Gitee
+-> 助手读取 `git rev-parse HEAD`，把输出作为本次 `FLYCODE_RELEASE_ID`
 -> 用户在 CloudBase Run 点一次“部署”
--> 助手验证线上结果
+-> 助手确认 `/api/health` 的 `release` 与该 SHA 一致，并验证线上功能
 ```
 
 通常不需要重新填写环境变量；CloudBase Run 会保留现有变量。
@@ -440,13 +448,7 @@ https://flycode.online/__health
 https://github.com/niously/flycode
 ```
 
-当前 GitHub `master` 与 Gitee `master` 均已确认指向：
-
-```text
-ef258157db782f25f40d9749d3c47469c62d2ca4
-```
-
-即 `ef25815 [verified] Revert spoofable admin lockout`。这说明两个代码仓库已同步；它本身不代表 CloudBase 已部署该提交。
+GitHub 镜像仓库与 Gitee 仓库是否同步，须按本节的实时 Git 命令核验。两个远程和本机 SHA 一致，仅说明代码仓库同步；它本身不代表 CloudBase 已部署该提交。
 
 GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、本机 `data/db.json` 或发布压缩包。
 
@@ -475,7 +477,7 @@ GitHub 与 Gitee 均不得提交 `.env`、CloudBase API Key、管理员密钥、
 
 1. 保留 CloudBase 云托管和 PostgreSQL 作为真实后端与数据源；不要删除、覆盖 `flycode_state` 或迁移前清空数据。
 2. 用户用中国大陆手机 Wi-Fi 和手机流量分别打开 `https://flycode.online`，确认首页能加载、投稿能提交；同时观察是否有超时或风险提示。该步骤决定是否可将新域名作为稳定公开入口。
-3. 页面分享元数据已修正：源码和本次实际返回的线上 HTML 均为 `og:url=https://flycode.online/`。当前接口不会返回部署提交号，因此不能仅凭页面可用就声称 CloudBase 已运行 `ef25815`；下次有需要上线的业务改动时，仍须在 CloudBase Run 手动部署并按具体功能验收。
+3. 发布版本核验已加入代码：下次 CloudBase 部署前，将 `FLYCODE_RELEASE_ID` 填为将要部署的 Git 提交完整 SHA；部署后 `/api/health` 的 `release` 必须完全一致。当前线上服务尚未部署这项能力，因此此刻接口不含该字段，不能把这次代码推送误报为已上线。
 4. 在新入口完整验收首页、`/__health`、`/api/health`、投稿、管理员登录、审核、投票、撤回投票、重新投票和 PostgreSQL 数据持久化。
 5. 若新域名在目标网络仍不稳定，再将 Render 或腾讯 EdgeOne Makers 作为对照路线；不要在尚未定位失败环节时盲目更换后端或购买更多服务。
 6. 若最终面向中国大陆长期公开，确认 CloudBase 环境的「备案管理」是否可直接备案。以控制台实际可见入口为准，不要未经确认购买 CVM。
@@ -515,7 +517,7 @@ Cloudflare DNS 名称服务器：venkat.ns.cloudflare.com / becky.ns.cloudflare.
 本机目录：C:\Users\l2104\flycode
 Gitee：https://gitee.com/nious101/flycode
 当前分支：master
-本机、Gitee、GitHub 已同步到：ef258157db782f25f40d9749d3c47469c62d2ca4；CloudBase 实际部署提交无法通过当前公开接口识别，不能把仓库同步误报为线上部署。
+提交前先实时核对本机、Gitee、GitHub 的 SHA 一致；后续每次 CloudBase 部署都应把 `FLYCODE_RELEASE_ID` 填为目标提交 SHA，并核验 `/api/health` 的 `release`。当前线上尚未部署这项版本核验能力。
 
 普通改动流程：修改 -> npm test -> 推送 Gitee -> CloudBase Run 手动点部署 -> 验证线上。
 任何 CloudBase API Key、管理员密钥或数据库密码都不能写入代码、Git、文档或聊天回复。

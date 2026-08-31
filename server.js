@@ -11,6 +11,7 @@ const PORT = Number(process.env.PORT || 4173);
 const ADMIN_KEY = process.env.FLYCODE_ADMIN_KEY || 'flycode-local';
 const CLOUDBASE_ENV_ID = process.env.FLYCODE_CLOUDBASE_ENV_ID || 'flycode-d9gd8dv0xc55f8e85';
 const CLOUDBASE_API_KEY = process.env.FLYCODE_CLOUDBASE_API_KEY || '';
+const RELEASE_ID = cleanReleaseId(process.env.FLYCODE_RELEASE_ID);
 const CLOUDBASE_SQL_URL = `https://${CLOUDBASE_ENV_ID}.api.tcloudbasegateway.com/v1/rdb/exec-pgsql`;
 
 if (process.env.NODE_ENV === 'production' && !process.env.FLYCODE_ADMIN_KEY) {
@@ -193,6 +194,11 @@ function mutateDb(mutator) {
 function cleanText(value, maxLength) {
   if (typeof value !== 'string') return '';
   return value.trim().slice(0, maxLength);
+}
+
+function cleanReleaseId(value) {
+  const releaseId = typeof value === 'string' ? value.trim() : '';
+  return /^[a-f0-9]{7,40}$/i.test(releaseId) ? releaseId.toLowerCase() : 'unknown';
 }
 
 function validHttpUrl(value) {
@@ -396,7 +402,7 @@ function parseBody(request) {
 
 async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/health') {
-    return sendJson(response, 200, { ok: true, service: 'flycode', time: now() });
+    return sendJson(response, 200, { ok: true, service: 'flycode', release: RELEASE_ID, time: now() });
   }
 
   if (request.method === 'GET' && url.pathname === '/api/state') {
