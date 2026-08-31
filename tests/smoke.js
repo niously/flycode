@@ -138,29 +138,6 @@ async function run() {
   const unauthorized = await request('/api/admin/state');
   assert.equal(unauthorized.status, 401);
 
-  const blockedIp = '192.0.2.10';
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const failedAdmin = await request('/api/admin/state', {
-      headers: { 'X-Admin-Key': 'wrong-admin-key', 'X-Forwarded-For': blockedIp }
-    });
-    assert.equal(failedAdmin.status, 401);
-  }
-  const blockedAdmin = await request('/api/admin/state', {
-    headers: { 'X-Admin-Key': 'wrong-admin-key', 'X-Forwarded-For': blockedIp }
-  });
-  assert.equal(blockedAdmin.status, 429);
-  assert.equal(blockedAdmin.headers.get('retry-after'), '600');
-
-  const recoverableIp = '192.0.2.11';
-  const failedOnce = await request('/api/admin/state', {
-    headers: { 'X-Admin-Key': 'wrong-admin-key', 'X-Forwarded-For': recoverableIp }
-  });
-  assert.equal(failedOnce.status, 401);
-  const recovered = await request('/api/admin/state', {
-    headers: { ...adminHeaders, 'X-Forwarded-For': recoverableIp }
-  });
-  assert.equal(recovered.status, 200);
-
   const createdIds = [];
   for (let index = 1; index <= 3; index += 1) {
     const payload = {

@@ -34,9 +34,6 @@ const phaseStatuses = new Set(['submitting', 'voting', 'execution', 'archived'])
 const proposalStatuses = new Set(['pending', 'approved', 'rejected']);
 let writeQueue = Promise.resolve();
 const proposalAttempts = new Map();
-const adminFailures = new Map();
-const ADMIN_FAILURE_LIMIT = 5;
-const ADMIN_LOCKOUT_MS = 10 * 60 * 1000;
 
 function now() {
   return new Date().toISOString();
@@ -355,24 +352,7 @@ function isAdmin(request) {
 }
 
 function requireAdmin(request, response) {
-  const source = getClientIp(request);
-  const currentTime = Date.now();
-  const failure = adminFailures.get(source);
-  if (failure?.lockedUntil > currentTime) {
-    const retryAfter = Math.ceil((failure.lockedUntil - currentTime) / 1000);
-    sendJson(response, 429, { error: '管理入口暂时锁定，请稍后再试。' }, { 'Retry-After': String(retryAfter) });
-    return false;
-  }
-  if (failure?.lockedUntil && failure.lockedUntil <= currentTime) adminFailures.delete(source);
-  if (isAdmin(request)) {
-    adminFailures.delete(source);
-    return true;
-  }
-  const nextFailureCount = (adminFailures.get(source)?.count || 0) + 1;
-  adminFailures.set(source, {
-    count: nextFailureCount,
-    lockedUntil: nextFailureCount >= ADMIN_FAILURE_LIMIT ? currentTime + ADMIN_LOCKOUT_MS : 0
-  });
+  if (isAdmin(request)) return true;
   sendJson(response, 401, { error: '需要管理员权限。' });
   return false;
 }
