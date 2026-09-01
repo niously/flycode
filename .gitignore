@@ -5,3 +5,5 @@ data/*.json
 data/*.tmp
 *.log
 flycode-cloudbase-run.zip
+supabase/.temp/
+supabase/.branches/

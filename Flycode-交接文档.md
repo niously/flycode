@@ -359,7 +359,13 @@ flycode-local
 
 ## 8. 发布与日常维护
 
-### 普通功能或页面更新
+### Supabase 备选后端准备（尚未切换）
+
+已在仓库增加 `supabase/migrations/20260901000000_initial_flycode.sql`，内容是 Flycode PostgreSQL 表结构和默认 RLS 保护。它只描述数据库结构，不包含当前 CloudBase 的任何真实数据。
+
+截图中的 Supabase GitHub 集成只负责读取仓库中的 `supabase/` 目录并执行迁移，不会自动部署 Flycode 的 `server.js`。当前线上链路仍是 Cloudflare Worker -> CloudBase Run -> CloudBase PostgreSQL。未完成备份、Supabase 连接、数据导入、后端改用 Supabase 和全流程回归前，不要删除 CloudBase 数据或把 Supabase 称为生产后端。
+
+启用截图中的 `Enable integration` 不需要升级 Pro；保持仓库 `niously/flycode`、工作目录 `.`、生产分支 `master` 即可。自动分支属于 Pro 预览功能，目前不需要开启。
 
 以后大多数更新只需要：
 

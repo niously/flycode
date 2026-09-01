@@ -28,6 +28,14 @@ npm start
 
 当前版本适合本机或局域网测试。正式公开部署使用 CloudBase Run 和 CloudBase PostgreSQL；具体线上链路与维护步骤见 `Flycode-交接文档.md`。
 
+## Supabase 数据库准备
+
+仓库中的 `supabase/migrations/` 已加入 Flycode 的 PostgreSQL 建表迁移。Supabase GitHub 集成启用后，只会识别并执行这里的数据库迁移；它不会自动部署 `server.js`，也不会自动复制 CloudBase PostgreSQL 的现有数据。
+
+当前后端仍然运行在 CloudBase Run，线上真实数据仍在 CloudBase PostgreSQL。完成数据备份、连接配置、数据导入和接口回归测试前，不要把 Supabase 当作生产后端，也不要删除或覆盖 CloudBase 数据。
+
+截图中的设置保持：仓库 `niously/flycode`、工作目录 `.`、生产分支 `master`。不需要升级 Pro；自动分支是预览功能，当前不影响生产迁移。
+
 ## 部署版本核验
 
 部署到 CloudBase Run 时，为服务添加一个非敏感环境变量。先在项目目录执行 `git rev-parse HEAD`，再将完整输出填入：

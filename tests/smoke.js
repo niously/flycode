@@ -12,6 +12,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const adminKey = `test-admin-${Date.now().toString(36)}`;
 const releaseId = '0123456789abcdef0123456789abcdef01234567';
 const adminHeaders = { 'X-Admin-Key': adminKey };
+const supabaseMigrationPath = path.join(root, 'supabase', 'migrations', '20260901000000_initial_flycode.sql');
 let serverProcess;
 let serverOutput = '';
 
@@ -116,6 +117,12 @@ async function stopServer() {
 }
 
 async function run() {
+  const supabaseMigration = fs.readFileSync(supabaseMigrationPath, 'utf8');
+  for (const table of ['schema_migrations', 'flycode_state', 'projects', 'phases', 'proposals', 'phase_candidates', 'votes', 'decisions', 'updates', 'audit_logs']) {
+    assert.ok(supabaseMigration.includes(`CREATE TABLE IF NOT EXISTS public.${table}`));
+  }
+  assert.ok(supabaseMigration.includes('ALTER TABLE public.flycode_state ENABLE ROW LEVEL SECURITY;'));
+
   startServer();
   await waitForHealth();
 
