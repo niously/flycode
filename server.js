@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { resolveStorageConfig, postgresConfig } = require('./storage-config');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -11,6 +12,8 @@ const PORT = Number(process.env.PORT || 4173);
 const ADMIN_KEY = process.env.FLYCODE_ADMIN_KEY || 'flycode-local';
 const CLOUDBASE_ENV_ID = process.env.FLYCODE_CLOUDBASE_ENV_ID || 'flycode-d9gd8dv0xc55f8e85';
 const CLOUDBASE_API_KEY = process.env.FLYCODE_CLOUDBASE_API_KEY || '';
+const STORAGE_MODE = resolveStorageConfig(process.env);
+const POSTGRES_CONFIG = postgresConfig(process.env);
 const RELEASE_ID = cleanReleaseId(process.env.FLYCODE_RELEASE_ID);
 const CLOUDBASE_SQL_URL = `https://${CLOUDBASE_ENV_ID}.api.tcloudbasegateway.com/v1/rdb/exec-pgsql`;
 
@@ -164,16 +167,46 @@ function normalizeDb(db) {
   return db;
 }
 
+async function queryPostgres(sql, parameters = []) {
+  const { Client } = require('pg');
+  if (!POSTGRES_CONFIG) throw new Error('PostgreSQL 未配置完整连接信息。');
+  const client = new Client(POSTGRES_CONFIG);
+  await client.connect();
+  try {
+    return (await client.query(sql, parameters)).rows;
+  } finally {
+    await client.end();
+  }
+}
+
+async function readPostgresDb() {
+  const rows = await queryPostgres("SELECT payload FROM public.flycode_state WHERE id = $1", ['main']);
+  const payload = rows[0]?.payload;
+  if (!payload || typeof payload !== 'object') throw new Error('PostgreSQL 中找不到 Flycode 状态。');
+  return normalizeDb(payload);
+}
+
+async function writePostgresDb(db) {
+  await queryPostgres(
+    `INSERT INTO public.flycode_state(id, payload, updated_at) VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP)
+     ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = CURRENT_TIMESTAMP`,
+    ['main', JSON.stringify(db)]
+  );
+}
+
 async function readStore() {
-  return CLOUDBASE_API_KEY ? readPgDb() : readDb();
+  if (STORAGE_MODE === 'postgres') return readPostgresDb();
+  if (STORAGE_MODE === 'cloudbase') return readPgDb();
+  return readDb();
 }
 
 async function mutateStore(mutator) {
-  if (!CLOUDBASE_API_KEY) return mutateDb(mutator);
+  if (STORAGE_MODE === 'json') return mutateDb(mutator);
   const operation = writeQueue.then(async () => {
-    const db = await readPgDb();
+    const db = STORAGE_MODE === 'postgres' ? await readPostgresDb() : await readPgDb();
     const result = mutator(db);
-    await writePgDb(db);
+    if (STORAGE_MODE === 'postgres') await writePostgresDb(db);
+    else await writePgDb(db);
     return result;
   });
   writeQueue = operation.catch(() => undefined);
@@ -402,7 +435,7 @@ function parseBody(request) {
 
 async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/health') {
-    return sendJson(response, 200, { ok: true, service: 'flycode', release: RELEASE_ID, time: now() });
+    return sendJson(response, 200, { ok: true, service: 'flycode', release: RELEASE_ID, storage: STORAGE_MODE, time: now() });
   }
 
   if (request.method === 'GET' && url.pathname === '/api/state') {

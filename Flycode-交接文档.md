@@ -290,6 +290,7 @@ CloudBase Run 当前应保留：
 NODE_ENV=production
 PORT=8080
 FLYCODE_DATA_DIR=/data
+FLYCODE_STORAGE=cloudbase
 FLYCODE_ADMIN_KEY=（生产管理员密钥）
 FLYCODE_CLOUDBASE_API_KEY=（CloudBase PostgreSQL 服务端 API Key）
 FLYCODE_RELEASE_ID=（本次部署前执行 git rev-parse HEAD 得到的完整 SHA）
@@ -364,6 +365,8 @@ flycode-local
 已在仓库增加 `supabase/migrations/20260901000000_initial_flycode.sql`，内容是 Flycode PostgreSQL 表结构和默认 RLS 保护。它只描述数据库结构，不包含当前 CloudBase 的任何真实数据。
 
 截图中的 Supabase GitHub 集成只负责读取仓库中的 `supabase/` 目录并执行迁移，不会自动部署 Flycode 的 `server.js`。当前线上链路仍是 Cloudflare Worker -> CloudBase Run -> CloudBase PostgreSQL。未完成备份、Supabase 连接、数据导入、后端改用 Supabase 和全流程回归前，不要删除 CloudBase 数据或把 Supabase 称为生产后端。
+
+Flycode 后端支持三种存储模式：`FLYCODE_STORAGE=json`（本机 JSON）、`FLYCODE_STORAGE=cloudbase`（当前线上 CloudBase REST）、`FLYCODE_STORAGE=postgres`（Supabase 或标准 PostgreSQL 直连）。切换 Supabase 必须显式设置 `FLYCODE_STORAGE=postgres` 和 `FLYCODE_DATABASE_URL`；连接串属于密钥，不得写入 Git 或聊天。
 
 启用截图中的 `Enable integration` 不需要升级 Pro；保持仓库 `niously/flycode`、工作目录 `.`、生产分支 `master` 即可。自动分支属于 Pro 预览功能，目前不需要开启。
 
@@ -526,5 +529,7 @@ Gitee：https://gitee.com/nious101/flycode
 提交前先实时核对本机、Gitee、GitHub 的 SHA 一致；后续每次 CloudBase 部署都应把 `FLYCODE_RELEASE_ID` 填为目标提交 SHA，并核验 `/api/health` 的 `release`。当前线上尚未部署这项版本核验能力。
 
 普通改动流程：修改 -> npm test -> 推送 Gitee -> CloudBase Run 手动点部署 -> 验证线上。
+
+Supabase 真正切换流程（尚未执行）：备份 CloudBase -> 在 Supabase 核对表结构 -> 导入数据并读回核对 -> 配置 `FLYCODE_STORAGE=postgres` 和连接串 -> 先在临时环境运行全流程测试 -> 再安排停机窗口切换 -> 验证 `/api/health`、`/api/state`、投稿和管理功能。
 任何 CloudBase API Key、管理员密钥或数据库密码都不能写入代码、Git、文档或聊天回复。
 ```

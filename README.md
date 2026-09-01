@@ -34,6 +34,16 @@ npm start
 
 当前后端仍然运行在 CloudBase Run，线上真实数据仍在 CloudBase PostgreSQL。完成数据备份、连接配置、数据导入和接口回归测试前，不要把 Supabase 当作生产后端，也不要删除或覆盖 CloudBase 数据。
 
+Flycode 后端现在支持三种存储模式：
+
+```text
+FLYCODE_STORAGE=json       本机 JSON 回退
+FLYCODE_STORAGE=cloudbase  当前线上 CloudBase PostgreSQL REST 模式
+FLYCODE_STORAGE=postgres   Supabase 或标准 PostgreSQL 直连模式
+```
+
+切到 Supabase 时必须显式设置 `FLYCODE_STORAGE=postgres`，并设置 `FLYCODE_DATABASE_URL` 或 `DATABASE_URL`。连接串属于密钥，不要写入代码、README、截图或聊天。
+
 截图中的设置保持：仓库 `niously/flycode`、工作目录 `.`、生产分支 `master`。不需要升级 Pro；自动分支是预览功能，当前不影响生产迁移。
 
 ## 部署版本核验

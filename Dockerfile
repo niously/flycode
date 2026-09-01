@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY server.js ./
+COPY storage-config.js ./
 COPY db-schema.sql ./
 COPY scripts ./scripts
 COPY public ./public

@@ -4,6 +4,8 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
+const { resolveStorageConfig } = require('../storage-config');
+
 const root = path.resolve(__dirname, '..');
 const serverPath = path.join(root, 'server.js');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flycode-test-'));
@@ -117,6 +119,27 @@ async function stopServer() {
 }
 
 async function run() {
+  assert.equal(resolveStorageConfig({}), 'json');
+  assert.equal(resolveStorageConfig({ FLYCODE_CLOUDBASE_API_KEY: 'cloudbase-key' }), 'cloudbase');
+  assert.equal(resolveStorageConfig({ FLYCODE_DATABASE_URL: 'postgres://user:password@host/db' }), 'postgres');
+  assert.equal(resolveStorageConfig({
+    FLYCODE_CLOUDBASE_API_KEY: 'cloudbase-key',
+    FLYCODE_DATABASE_URL: 'postgres://user:password@host/db'
+  }), 'postgres');
+  assert.equal(resolveStorageConfig({
+    FLYCODE_STORAGE: 'cloudbase',
+    FLYCODE_CLOUDBASE_API_KEY: 'cloudbase-key',
+    FLYCODE_DATABASE_URL: 'postgres://user:password@host/db'
+  }), 'cloudbase');
+  assert.equal(resolveStorageConfig({
+    FLYCODE_STORAGE: 'json',
+    FLYCODE_DATABASE_URL: 'postgres://user:password@host/db'
+  }), 'json');
+  assert.throws(() => resolveStorageConfig({ FLYCODE_STORAGE: 'supabase' }), /FLYCODE_STORAGE/);
+
+  const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+  assert.ok(dockerfile.includes('COPY storage-config.js ./'));
+
   const supabaseMigration = fs.readFileSync(supabaseMigrationPath, 'utf8');
   for (const table of ['schema_migrations', 'flycode_state', 'projects', 'phases', 'proposals', 'phase_candidates', 'votes', 'decisions', 'updates', 'audit_logs']) {
     assert.ok(supabaseMigration.includes(`CREATE TABLE IF NOT EXISTS public.${table}`));
