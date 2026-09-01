@@ -46,6 +46,12 @@ FLYCODE_STORAGE=postgres   Supabase 或标准 PostgreSQL 直连模式
 
 截图中的设置保持：仓库 `niously/flycode`、工作目录 `.`、生产分支 `master`。不需要升级 Pro；自动分支是预览功能，当前不影响生产迁移。
 
+## Cloudflare D1 准备（尚未上线）
+
+`worker-d1.mjs` 和 `wrangler-d1.toml` 是 Flycode 的 Cloudflare Workers + D1 版本，已在本地完成完整工作流测试。它使用 Cloudflare D1 SQLite 作为数据库，Worker 作为后端运行环境，Workers Assets 作为静态资源服务。
+
+D1 数据库 `flycode-d1` 已创建（ID `7b10156b-7153-4a70-8887-ede50a4caa41`），但尚未执行迁移或导入数据。当前线上仍使用 CloudBase，不受影响。
+
 ## 部署版本核验
 
 部署到 CloudBase Run 时，为服务添加一个非敏感环境变量。先在项目目录执行 `git rev-parse HEAD`，再将完整输出填入：

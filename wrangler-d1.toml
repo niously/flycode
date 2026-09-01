@@ -1,0 +1,19 @@
+name = "flycode-d1"
+main = "worker-d1.mjs"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[vars]
+FLYCODE_RELEASE_ID = "local-d1-preview"
+
+# Fill database_id after creating the D1 database in Cloudflare.
+# Keep this separate from wrangler.toml until the D1 build passes live testing.
+[[d1_databases]]
+binding = "FLYCODE_DB"
+database_name = "flycode-d1"
+database_id = "7b10156b-7153-4a70-8887-ede50a4caa41"
+migrations_dir = "migrations"
