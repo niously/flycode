@@ -1,5 +1,6 @@
 -- Flycode database baseline for Supabase.
 -- This creates the relational schema only; it does not import production data.
+-- The GitHub integration applies this file to the configured Supabase project.
 
 CREATE TABLE IF NOT EXISTS public.schema_migrations (
   version INTEGER PRIMARY KEY,
