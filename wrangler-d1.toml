@@ -2,6 +2,10 @@ name = "flycode-d1"
 main = "worker-d1.mjs"
 compatibility_date = "2026-09-01"
 
+routes = [
+  { pattern = "d1.flycode.online", custom_domain = true }
+]
+
 [assets]
 directory = "./public"
 binding = "ASSETS"

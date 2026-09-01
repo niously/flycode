@@ -7,3 +7,4 @@ data/*.tmp
 flycode-cloudbase-run.zip
 supabase/.temp/
 supabase/.branches/
+.wrangler/

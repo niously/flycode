@@ -360,13 +360,75 @@ flycode-local
 
 ## 8. 发布与日常维护
 
-### Supabase 备选后端准备（尚未切换）
+### 备选后端准备（尚未切换）
+
+#### Supabase PostgreSQL（已准备表结构）
 
 已在仓库增加 `supabase/migrations/20260901000000_initial_flycode.sql`，内容是 Flycode PostgreSQL 表结构和默认 RLS 保护。它只描述数据库结构，不包含当前 CloudBase 的任何真实数据。
 
 截图中的 Supabase GitHub 集成只负责读取仓库中的 `supabase/` 目录并执行迁移，不会自动部署 Flycode 的 `server.js`。当前线上链路仍是 Cloudflare Worker -> CloudBase Run -> CloudBase PostgreSQL。未完成备份、Supabase 连接、数据导入、后端改用 Supabase 和全流程回归前，不要删除 CloudBase 数据或把 Supabase 称为生产后端。
 
-Flycode 后端支持三种存储模式：`FLYCODE_STORAGE=json`（本机 JSON）、`FLYCODE_STORAGE=cloudbase`（当前线上 CloudBase REST）、`FLYCODE_STORAGE=postgres`（Supabase 或标准 PostgreSQL 直连）。切换 Supabase 必须显式设置 `FLYCODE_STORAGE=postgres` 和 `FLYCODE_DATABASE_URL`；连接串属于密钥，不得写入 Git 或聊天。
+#### Cloudflare D1（已部署并可在 d1.flycode.online 验证）
+
+已部署 Cloudflare D1 版本：
+
+```text
+https://d1.flycode.online
+```
+
+D1 Worker 名称：
+
+```text
+flycode-d1
+```
+
+D1 数据库：
+
+```text
+flycode-d1
+```
+
+当前访问链路：
+
+```text
+d1.flycode.online
+-> Cloudflare DNS
+-> Cloudflare Worker (flycode-d1, 路由 d1.flycode.online/*)
+-> Cloudflare D1 (flycode-d1)
+```
+
+D1 版本已验证功能：
+
+- ✅ 健康检查：`https://d1.flycode.online/__health` 返回 `"storage":"d1"`
+- ✅ 投稿接口：`POST /api/proposals` 成功写入并返回完整状态
+- ✅ 状态读取：`GET /api/state` 返回项目、阶段、提案和成长记录
+- ✅ 首页加载：`HTTP 200`
+
+D1 版本文件：
+
+```text
+worker-d1.mjs                   D1 Worker 入口，完整后端逻辑
+wrangler-d1.toml                D1 Worker 配置
+scripts/prepare-d1-import.js    从 CloudBase 导入数据到 D1 的准备工具
+```
+
+当前状态：
+
+- **flycode.online**（主域名）：继续指向 CloudBase 云托管 + CloudBase PostgreSQL
+- **d1.flycode.online**（测试域名）：已指向 Cloudflare D1 版本
+
+何时切换：用户决定后，修改 `wrangler-d1.toml` 增加 `flycode.online` 自定义域名并重新部署，即可让主域名指向 D1 版本。
+
+#### 存储模式总结
+
+Flycode 后端支持四种存储模式：
+
+1. `FLYCODE_STORAGE=json`（本机 JSON，仅本机测试）
+2. `FLYCODE_STORAGE=cloudbase`（当前线上 CloudBase REST + CloudBase PostgreSQL）
+3. `FLYCODE_STORAGE=postgres`（Supabase 或标准 PostgreSQL 直连）
+4. Cloudflare D1（独立 Worker + D1 数据库，当前在 d1.flycode.online 可用）
+
+切换 Supabase 必须显式设置 `FLYCODE_STORAGE=postgres` 和 `FLYCODE_DATABASE_URL`；切换 D1 只需修改 Worker 配置并重新部署；连接串和密钥不得写入 Git 或聊天。
 
 启用截图中的 `Enable integration` 不需要升级 Pro；保持仓库 `niously/flycode`、工作目录 `.`、生产分支 `master` 即可。自动分支属于 Pro 预览功能，目前不需要开启。
 
