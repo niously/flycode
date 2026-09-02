@@ -148,13 +148,15 @@ function setMessage(target, text, isError = false) {
 async function api(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
+    'X-Visitor-Id': state.visitorId,
     ...(options.headers || {})
   };
-  if (state.adminKey) {
-    headers['x-flycode-admin-key'] = state.adminKey;
+  if (state.adminKey && !headers['X-Admin-Key'] && !headers['x-admin-key']) {
+    headers['X-Admin-Key'] = state.adminKey;
   }
   const res = await fetch(path, { credentials: 'same-origin', ...options, headers });
-  const data = await res.json().catch(() => ({ ok: false, error: '网络返回异常' }));
+  const data = await res.json().catch(() => ({ error: '网络返回异常' }));
+  data.ok = res.ok;
   if (!res.ok && !data.error) {
     data.error = `HTTP ${res.status}`;
   }
@@ -204,9 +206,9 @@ function clearDraft() {
 }
 
 async function loadPublic(showFeedback = true) {
-  const res = await api(`/api/state?visitor_id=${encodeURIComponent(state.visitorId)}`);
+  const res = await api('/api/state');
   if (!res.ok) {
-    if (els.lastSync && showFeedback) els.lastSync.textContent = '已同步 · 离线模式';
+    if (els.lastSync && showFeedback) els.lastSync.textContent = '连接中断，重试中...';
     return;
   }
   state.public = res;
@@ -220,10 +222,11 @@ function renderPublic() {
   const data = state.public;
   if (!data) return;
 
-  const currentPhase = data.current_phase || {};
-  if (els.roundNumber) els.roundNumber.textContent = `第 ${String(currentPhase.id || 1).padStart(2, '0')} 轮`;
+  const currentPhase = data.currentPhase || {};
+  const phaseNumber = String(currentPhase.number || 1).padStart(2, '0');
+  if (els.roundNumber) els.roundNumber.textContent = `第 ${phaseNumber} 轮`;
   if (els.roundStatus) els.roundStatus.textContent = statusText[currentPhase.status] || currentPhase.status || '进行中';
-  if (els.boardPhaseId) els.boardPhaseId.textContent = `${String(currentPhase.id || 1).padStart(2, '0')} / ${String(data.summary?.total_rounds || 1).padStart(2, '0')}`;
+  if (els.boardPhaseId) els.boardPhaseId.textContent = `${phaseNumber} / ${String(data.phases?.length || 1).padStart(2, '0')}`;
   if (els.currentQuestion) els.currentQuestion.textContent = currentPhase.question || '你希望它先做什么？';
   if (els.currentPhaseDescription) els.currentPhaseDescription.textContent = currentPhase.title || '提出一个具体想法，告诉我们为什么它值得优先考虑。';
   if (els.phaseDeadline) els.phaseDeadline.textContent = currentPhase.deadline ? formatDate(currentPhase.deadline) : '开放中';
@@ -234,16 +237,16 @@ function renderPublic() {
     els.roundTrackFill.style.width = progressMap[currentPhase.status] || '33%';
   }
 
-  if (els.statProposals) els.statProposals.textContent = data.summary?.total_proposals ?? (data.proposals || []).length;
-  if (els.statParticipants) els.statParticipants.textContent = data.summary?.total_participants ?? 0;
-  if (els.statRounds) els.statRounds.textContent = data.summary?.total_rounds ?? 1;
+  if (els.statProposals) els.statProposals.textContent = data.stats?.proposalCount ?? (data.proposals || []).length;
+  if (els.statParticipants) els.statParticipants.textContent = data.stats?.participantCount ?? 0;
+  if (els.statRounds) els.statRounds.textContent = data.stats?.completedRounds ?? 1;
 
-  renderProposals(data.proposals || [], currentPhase.status);
-  renderDecision(currentPhase);
-  renderTimeline(data.timeline || []);
+  renderProposals(data.proposals || [], currentPhase.status, currentPhase);
+  renderDecision(currentPhase, data.proposals || []);
+  renderTimeline(data.updates || []);
 }
 
-function renderProposals(proposals, phaseStatus) {
+function renderProposals(proposals, phaseStatus, phase) {
   if (!els.proposalList) return;
   const isVoting = phaseStatus === 'voting';
   if (els.proposalCountLabel) els.proposalCountLabel.textContent = `${proposals.length} 个公开提案`;
@@ -256,27 +259,29 @@ function renderProposals(proposals, phaseStatus) {
   }
 
   if (els.proposalEmpty) els.proposalEmpty.hidden = true;
+  const candidateIds = new Set(state.public?.voting?.candidateIds || phase?.candidates || []);
+  const alreadyVoted = Boolean(state.public?.voting?.hasVoted);
   els.proposalList.innerHTML = proposals.map((p, idx) => {
-    const voted = Boolean(p.user_has_voted);
-    const voteBtn = isVoting
+    const candidate = isVoting && candidateIds.has(p.id);
+    const voteBtn = candidate
       ? `<div class="proposal-vote">
-          <button class="vote-btn ${voted ? 'active' : ''}" type="button" data-vote-id="${escapeHtml(p.id)}">
-            <span aria-hidden="true">${voted ? '✓' : '▲'}</span>
-            <span>${p.votes || 0}</span>
+          <button class="vote-btn ${alreadyVoted ? 'active' : ''}" type="button" data-vote-id="${escapeHtml(p.id)}" ${alreadyVoted ? 'disabled' : ''}>
+            <span aria-hidden="true">${alreadyVoted ? '✓' : '▲'}</span>
+            <span>${p.voteCount || 0}</span>
           </button>
         </div>`
-      : `<div class="proposal-vote"><span class="proposal-index">#${String(idx + 1).padStart(2, '0')}</span></div>`;
+      : `<div class="proposal-vote"><span class="proposal-index">#${String(idx + 1).padStart(2, '0')}</span><span class="vote-count">${p.voteCount || 0} 票</span></div>`;
 
     const linkHtml = p.link ? `<a class="proposal-link-pill" href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer">参考链接 ↗</a>` : '';
 
     return `<article class="proposal-card" data-card-id="${escapeHtml(p.id)}">
-      <span class="proposal-index">0${idx + 1}</span>
+      <span class="proposal-index">${String(idx + 1).padStart(2, '0')}</span>
       <div class="proposal-body">
         <h3>${escapeHtml(p.title)}</h3>
         <p>${escapeHtml(p.description)}</p>
         <div class="proposal-meta">
           <span class="proposal-author">${escapeHtml(p.author || '匿名共创者')}</span>
-          <span>${formatRelative(p.created_at)}</span>
+          <span>${formatRelative(p.createdAt)}</span>
           ${linkHtml}
         </div>
       </div>
@@ -285,18 +290,20 @@ function renderProposals(proposals, phaseStatus) {
   }).join('');
 }
 
-function renderDecision(phase) {
+function renderDecision(phase, proposals) {
   if (!els.decisionSection || !els.decisionStrip) return;
-  if (!phase.decision && phase.status !== 'execution' && phase.status !== 'archived') {
+  const chosen = phase?.chosenProposalId ? proposals.find((item) => item.id === phase.chosenProposalId) : null;
+  if (!chosen || !phase?.decidedAt) {
     els.decisionSection.hidden = true;
+    els.decisionStrip.innerHTML = '';
     return;
   }
   els.decisionSection.hidden = false;
   els.decisionStrip.innerHTML = `<div class="decision-item">
-    <div class="decision-badge">EXECUTING</div>
+    <div class="decision-badge">已进入执行</div>
     <div class="decision-content">
-      <h3>${escapeHtml(phase.decision_title || phase.title || '本轮执行目标')}</h3>
-      <p>${escapeHtml(phase.decision_note || phase.question || '正在全力研发落地中。')}</p>
+      <h3>${escapeHtml(chosen.title)}</h3>
+      <p>${escapeHtml(phase.decisionNote || '本轮决定已公布，项目进入执行阶段。')}</p>
     </div>
   </div>`;
 }
@@ -309,7 +316,7 @@ function renderTimeline(timeline) {
   }
   els.timelineList.innerHTML = timeline.map(entry => `
     <article class="timeline-entry">
-      <time class="timeline-date">${formatDate(entry.created_at)}</time>
+      <time class="timeline-date">${formatDate(entry.createdAt)}</time>
       <div class="timeline-body">
         <h3>${escapeHtml(entry.title)}</h3>
         <p>${escapeHtml(entry.body)}</p>
@@ -320,19 +327,17 @@ function renderTimeline(timeline) {
 
 els.proposalList?.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-vote-id]');
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   const id = btn.dataset.voteId;
   btn.disabled = true;
-
   createRipple(e, btn);
-
-  const res = await api('/api/vote', {
+  const res = await api('/api/votes', {
     method: 'POST',
-    body: JSON.stringify({ proposal_id: id, visitor_id: state.visitorId })
+    body: JSON.stringify({ proposalId: id, visitorId: state.visitorId })
   });
   if (res.ok) {
     spawnVoteFlyParticle(e.clientX, e.clientY);
-    showToast(res.message || '投票已记录！');
+    showToast('投票已记录！');
     await loadPublic(false);
   } else {
     showToast(res.error || '投票失败', 'error');
@@ -412,8 +417,15 @@ els.proposalTitle?.addEventListener('input', () => { updateCounters(); saveDraft
 els.proposalDescription?.addEventListener('input', () => { updateCounters(); saveDraft(); });
 
 async function loadAdmin(showFeedback = true) {
-  const res = await api('/api/admin/state');
-  if (!res.ok) return false;
+  if (!state.adminKey) return false;
+  const res = await api('/api/admin/state', { headers: { 'X-Admin-Key': state.adminKey } });
+  if (!res.ok) {
+    state.admin = null;
+    sessionStorage.removeItem('flycode-admin-key');
+    state.adminKey = '';
+    if (showFeedback) setMessage(els.adminLoginMessage, res.error || '管理密钥不正确。', true);
+    return false;
+  }
   state.admin = res;
   renderAdmin();
   return true;
@@ -424,82 +436,143 @@ function renderAdmin() {
   els.adminLoginView.hidden = true;
   els.adminDashboard.hidden = false;
 
-  const sum = state.admin.summary || {};
+  const allProposals = state.admin.allProposals || [];
+  const pending = allProposals.filter((proposal) => proposal.status === 'pending');
+  const approved = allProposals.filter((proposal) => proposal.status === 'approved');
+  const rejected = allProposals.filter((proposal) => proposal.status === 'rejected');
+  const phase = state.admin.currentPhase;
+
   if (els.adminSummary) {
     els.adminSummary.innerHTML = `
-      <div class="admin-summary-item"><strong>${sum.pending || 0}</strong><span>待审核</span></div>
-      <div class="admin-summary-item"><strong>${sum.approved || 0}</strong><span>已公开</span></div>
-      <div class="admin-summary-item"><strong>${sum.rejected || 0}</strong><span>未采用</span></div>
-      <div class="admin-summary-item"><strong>${sum.votes || 0}</strong><span>总投票</span></div>
+      <div class="admin-summary-item"><strong>${allProposals.length}</strong><span>全部提案</span></div>
+      <div class="admin-summary-item"><strong>${pending.length}</strong><span>待审核</span></div>
+      <div class="admin-summary-item"><strong>${state.admin.stats?.participantCount || 0}</strong><span>投票参与者</span></div>
     `;
   }
+  if (els.adminCurrentStatus) els.adminCurrentStatus.textContent = statusText[phase?.status] || '';
+  if (els.pendingCount) els.pendingCount.textContent = `${pending.length} 条待处理`;
+  if (els.pendingTabCount) els.pendingTabCount.textContent = pending.length;
+  if (els.approvedTabCount) els.approvedTabCount.textContent = approved.length;
+  if (els.rejectedTabCount) els.rejectedTabCount.textContent = rejected.length;
 
-  renderReviewList('pending', state.admin.pending_proposals || []);
-  renderReviewList('approved', state.admin.approved_proposals || []);
-  renderReviewList('rejected', state.admin.rejected_proposals || []);
-
-  if (els.pendingTabCount) els.pendingTabCount.textContent = (state.admin.pending_proposals || []).length;
-  if (els.approvedTabCount) els.approvedTabCount.textContent = (state.admin.approved_proposals || []).length;
-  if (els.rejectedTabCount) els.rejectedTabCount.textContent = (state.admin.rejected_proposals || []).length;
+  renderReviewList(els.adminProposals, pending, 'pending');
+  renderReviewList(els.approvedProposals, approved, 'approved');
+  renderReviewList(els.rejectedProposals, rejected, 'rejected');
+  renderPhaseActions(phase, state.admin);
 }
 
-function renderReviewList(tab, list) {
-  const container = tab === 'pending' ? els.adminProposals : (tab === 'approved' ? els.approvedProposals : els.rejectedProposals);
+function renderReviewList(container, proposals, type) {
   if (!container) return;
-
-  if (list.length === 0) {
-    container.innerHTML = '<p class="admin-empty">这里没有提案。</p>';
+  if (!proposals.length) {
+    container.innerHTML = '<p class="admin-empty">这里暂时没有提案。</p>';
     return;
   }
-
-  container.innerHTML = list.map(p => `
-    <div class="admin-proposal-row review-proposal-row" data-row-id="${escapeHtml(p.id)}">
-      <input type="checkbox" class="proposal-checkbox" data-tab="${tab}" data-id="${escapeHtml(p.id)}">
+  container.innerHTML = proposals.map((proposal, index) => `
+    <div class="admin-proposal-row review-proposal-row" data-row-id="${escapeHtml(proposal.id)}">
+      ${type === 'pending' || type === 'rejected'
+        ? `<label class="review-check"><input type="checkbox" class="proposal-checkbox" data-type="${type}" data-id="${escapeHtml(proposal.id)}"><span class="sr-only">选择 ${escapeHtml(proposal.title)}</span></label>`
+        : '<span class="review-check-spacer" aria-hidden="true"></span>'}
       <div>
         <div class="review-proposal-topline">
-          <span class="review-status ${p.status}">${statusText[p.status] || p.status}</span>
-          <strong>${escapeHtml(p.title)}</strong>
+          <span class="review-status ${proposal.status}">${statusText[proposal.status] || proposal.status}</span>
+          <strong>${escapeHtml(proposal.title)}</strong>
         </div>
-        <p class="proposal-desc">${escapeHtml(p.description)}</p>
+        <p class="proposal-desc">${escapeHtml(proposal.description)}</p>
       </div>
       <div class="admin-row-actions">
-        ${tab === 'pending' ? `
-          <button class="small-button approve" type="button" data-action="approve" data-id="${escapeHtml(p.id)}">通过</button>
-          <button class="small-button reject" type="button" data-action="reject" data-id="${escapeHtml(p.id)}">不采用</button>
-        ` : (tab === 'rejected' ? `
-          <button class="small-button approve" type="button" data-action="approve" data-id="${escapeHtml(p.id)}">重新通过</button>
-        ` : `
-          <button class="small-button reject" type="button" data-action="reject" data-id="${escapeHtml(p.id)}">下架</button>
-        `)}
-        <button class="small-button danger" type="button" data-action="delete" data-id="${escapeHtml(p.id)}">删除</button>
+        ${type === 'pending' ? `
+          <button class="small-button approve" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="approved">通过</button>
+          <button class="small-button reject" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="rejected">不采用</button>
+        ` : (type === 'rejected' ? `
+          <button class="small-button approve" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="pending">重新审查</button>
+        ` : '')}
       </div>
     </div>
   `).join('');
 }
 
-document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.admin-row-actions button');
-  if (!btn) return;
-  const action = btn.dataset.action;
-  const id = btn.dataset.id;
-  if (!action || !id) return;
+function renderPhaseActions(phase, data) {
+  if (!els.phaseActions || !phase) return;
+  const approved = (data.allProposals || []).filter((proposal) => proposal.phaseId === phase.id && proposal.status === 'approved');
+  const candidateIds = data.voting?.candidateIds || phase.candidates || [];
+  const candidates = data.decisionCandidates?.length
+    ? data.decisionCandidates
+    : candidateIds.length
+      ? approved.filter((proposal) => candidateIds.includes(proposal.id))
+      : approved;
+  els.phaseActions.innerHTML = '';
+  if (els.decisionForm) els.decisionForm.hidden = true;
+  if (phase.status === 'submitting') {
+    els.phaseActions.innerHTML = `<button class="phase-action" type="button" data-phase-status="voting" ${approved.length ? '' : 'disabled'}>审核完成，开启投票</button><span class="admin-empty">${approved.length ? `已有 ${approved.length} 个通过的提案` : '至少通过一个提案后才能开启投票'}</span>`;
+  } else if (phase.status === 'voting') {
+    els.phaseActions.innerHTML = candidates.length
+      ? '<span class="admin-empty">投票进行中。选择一个候选提案并公布决定。</span><button class="phase-action secondary" type="button" data-withdraw-voting>撤回投票，重新审核</button>'
+      : '<span class="admin-empty error">当前没有可决定的候选提案，请刷新工作台并检查已公开提案。</span>';
+    if (els.decisionForm) els.decisionForm.hidden = candidates.length === 0;
+    if (els.decisionProposal) {
+      els.decisionProposal.innerHTML = candidates.length
+        ? candidates.map((proposal) => `<option value="${escapeHtml(proposal.id)}">${escapeHtml(proposal.title)}（${proposal.voteCount || 0} 票）</option>`).join('')
+        : '<option value="">暂无可选提案</option>';
+    }
+  } else if (phase.status === 'execution') {
+    els.phaseActions.innerHTML = '<span class="admin-empty">本轮已进入执行阶段。完成后可以归档并开启下一轮。</span><button class="phase-action secondary" type="button" data-phase-status="archived">归档本轮</button>';
+  } else {
+    els.phaseActions.innerHTML = '<span class="admin-empty">本轮已归档。可以在下方创建新的阶段。</span>';
+  }
+}
 
-  let res;
-  if (action === 'approve') {
-    res = await api('/api/admin/proposals/moderate', { method: 'POST', body: JSON.stringify({ ids: [id], action: 'approve' }) });
-  } else if (action === 'reject') {
-    res = await api('/api/admin/proposals/moderate', { method: 'POST', body: JSON.stringify({ ids: [id], action: 'reject' }) });
-  } else if (action === 'delete') {
-    if (!confirm('确定永久删除这条提案吗？')) return;
-    res = await api('/api/admin/proposals/moderate', { method: 'POST', body: JSON.stringify({ ids: [id], action: 'delete' }) });
+document.addEventListener('click', async (e) => {
+  const reviewBtn = e.target.closest('[data-review-id]');
+  if (reviewBtn) {
+    const proposalId = reviewBtn.dataset.reviewId;
+    const status = reviewBtn.dataset.reviewStatus;
+    const res = await api('/api/admin/proposals/review', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': state.adminKey },
+      body: JSON.stringify({ proposalId, status })
+    });
+    if (res.ok) {
+      showToast(status === 'approved' ? '提案已通过并公开。' : status === 'pending' ? '提案已回到待审核。' : '提案已标记为不采用。');
+      await loadAdmin(false);
+      await loadPublic(false);
+    } else {
+      showToast(res.error || '操作失败', 'error');
+    }
+    return;
   }
 
-  if (res?.ok) {
-    showToast('操作已完成。');
-    await loadAdmin(false);
-    await loadPublic(false);
-  } else {
-    showToast(res?.error || '操作失败', 'error');
+  const phaseBtn = e.target.closest('[data-phase-status]');
+  if (phaseBtn) {
+    const res = await api('/api/admin/phase/status', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': state.adminKey },
+      body: JSON.stringify({ status: phaseBtn.dataset.phaseStatus })
+    });
+    if (res.ok) {
+      showToast(`阶段状态已更新为：${statusText[phaseBtn.dataset.phaseStatus]}`);
+      await loadAdmin(false);
+      await loadPublic(false);
+    } else {
+      showToast(res.error || '操作失败', 'error');
+    }
+    return;
+  }
+
+  const withdrawBtn = e.target.closest('[data-withdraw-voting]');
+  if (withdrawBtn) {
+    if (!confirm('确定撤回本轮投票吗？当前候选提案会回到待审核，已经产生的票数会清零。')) return;
+    const res = await api('/api/admin/phase/withdraw-voting', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': state.adminKey },
+      body: JSON.stringify({})
+    });
+    if (res.ok) {
+      showToast('投票已撤回，候选提案回到待审核。');
+      await loadAdmin(false);
+      await loadPublic(false);
+    } else {
+      showToast(res.error || '操作失败', 'error');
+    }
   }
 });
 
@@ -520,14 +593,13 @@ els.adminLoginForm?.addEventListener('submit', async (e) => {
   const key = els.adminKey.value.trim();
   if (!key) return setMessage(els.adminLoginMessage, '请输入管理密钥。', true);
   state.adminKey = key;
-  const ok = await loadAdmin(false);
+  const ok = await loadAdmin(true);
   if (ok) {
     sessionStorage.setItem('flycode-admin-key', key);
     setMessage(els.adminLoginMessage, '');
     showToast('已进入项目工作台。');
   } else {
     state.adminKey = '';
-    setMessage(els.adminLoginMessage, '管理密钥不正确。', true);
   }
 });
 
@@ -538,6 +610,93 @@ els.adminLogout?.addEventListener('click', () => {
   els.adminLoginView.hidden = false;
   els.adminDashboard.hidden = true;
   els.adminKey.value = '';
+});
+
+els.adminRefresh?.addEventListener('click', async () => {
+  if (!state.adminKey) return;
+  els.adminRefresh.disabled = true;
+  try {
+    if (await loadAdmin(true)) {
+      await loadPublic(false);
+      showToast('工作台已刷新。');
+    }
+  } finally {
+    els.adminRefresh.disabled = false;
+  }
+});
+
+els.decisionSubmit?.addEventListener('click', async () => {
+  const proposalId = els.decisionProposal?.value;
+  if (!proposalId) return showToast('请先选择一个提案。', 'error');
+  els.decisionSubmit.disabled = true;
+  try {
+    const res = await api('/api/admin/decision', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': state.adminKey },
+      body: JSON.stringify({ proposalId, note: els.decisionNote?.value || '' })
+    });
+    if (res.ok) {
+      if (els.decisionNote) els.decisionNote.value = '';
+      showToast('本轮决定已公布。');
+      await loadAdmin(false);
+      await loadPublic(false);
+    } else {
+      showToast(res.error || '公布失败', 'error');
+    }
+  } finally {
+    els.decisionSubmit.disabled = false;
+  }
+});
+
+els.updateForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const res = await api('/api/admin/updates', {
+    method: 'POST',
+    headers: { 'X-Admin-Key': state.adminKey },
+    body: JSON.stringify({ title: els.updateTitle?.value || '', body: els.updateBody?.value || '' })
+  });
+  if (res.ok) {
+    els.updateForm.reset();
+    setMessage(els.updateMessage, '进展已发布。');
+    await loadAdmin(false);
+    await loadPublic(false);
+  } else {
+    setMessage(els.updateMessage, res.error || '发布失败', true);
+  }
+});
+
+els.phaseForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const res = await api('/api/admin/phases', {
+    method: 'POST',
+    headers: { 'X-Admin-Key': state.adminKey },
+    body: JSON.stringify({
+      title: els.phaseTitle?.value || '',
+      question: els.phaseQuestion?.value || '',
+      deadline: els.phaseDeadlineInput?.value || ''
+    })
+  });
+  if (res.ok) {
+    els.phaseForm.reset();
+    setMessage(els.phaseMessage, '新阶段已经开启。');
+    await loadAdmin(false);
+    await loadPublic(false);
+  } else {
+    setMessage(els.phaseMessage, res.error || '创建失败', true);
+  }
+});
+
+els.exportData?.addEventListener('click', async () => {
+  const res = await api('/api/admin/backup', { headers: { 'X-Admin-Key': state.adminKey } });
+  if (!res.ok) return showToast(res.error || '导出失败', 'error');
+  const blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `flycode-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast('项目数据已导出。');
 });
 
 document.querySelectorAll('.review-tab').forEach(tabBtn => {
