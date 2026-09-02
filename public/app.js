@@ -364,11 +364,17 @@ function spawnVoteFlyParticle(x, y) {
 }
 
 const cursorGlow = document.querySelector('#cursor-glow');
-if (cursorGlow) {
+// 仅桌面端启用光标聚光灯：手机点击会触发"模拟 mousemove"把光斑定死在点击处，
+// 且之后没有事件再移动它，看起来就像有鼠标一直留在那里。触屏设备彻底禁用。
+const hasFinePointer = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+const hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+if (cursorGlow && hasFinePointer && !hasTouch) {
   window.addEventListener('mousemove', (e) => {
     cursorGlow.style.left = `${e.clientX}px`;
     cursorGlow.style.top = `${e.clientY}px`;
   });
+} else if (cursorGlow) {
+  cursorGlow.style.display = 'none';
 }
 
 els.proposalForm?.addEventListener('submit', async (e) => {
