@@ -29,6 +29,25 @@
   
   <!-- 关键：内联同步主题脚本，必须在 CSS 加载前执行，防止 FOUC 和系统深色模式锁死 -->
   <script>
+    // 版本检测：强制清除旧缓存
+    (function() {
+      const CURRENT_VERSION = '20260902-02';
+      const VERSION_KEY = 'flycode-version';
+      const savedVersion = sessionStorage.getItem(VERSION_KEY);
+      
+      if (savedVersion && savedVersion !== CURRENT_VERSION) {
+        // 版本不匹配，强制刷新
+        sessionStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+        window.location.reload(true);
+        return;
+      }
+      
+      if (!savedVersion) {
+        sessionStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+      }
+    })();
+    
+    // 主题初始化
     (function() {
       const STORAGE_KEY = 'flycode-theme-choice';
       function getSystemTheme() {
@@ -87,7 +106,9 @@
         </div>
       </header>
     </div>
+  </div>
 
+  <div class="site-shell">
     <main id="top">
       <section class="round-bar" aria-label="当前阶段">
         <div class="round-label"><span class="pulse-dot"></span><span>公开共创阶段</span></div>
