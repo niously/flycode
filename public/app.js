@@ -553,57 +553,49 @@ document.querySelectorAll('.review-tab').forEach(tabBtn => {
 });
 
 /* ==========================================================================
-   双主题切换引擎 (Stripe 晨光流色 / Linear 极光深空)
-   支持三种模式：浅色、深色、跟随系统
+   双主题切换引擎 (手机端与桌面端完全兼容)
+   支持：浅色 ⇄ 深色 双向切换，默认跟随系统
    ========================================================================== */
 const themeToggleBtn = document.querySelector('#theme-toggle');
 const themeIconSun = document.querySelector('#theme-icon-sun');
 const themeIconMoon = document.querySelector('#theme-icon-moon');
 
+function getSystemTheme() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 function applyTheme(theme) {
-  let actualTheme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('flycode-theme', theme);
   
-  // 如果是 'auto' 则根据系统偏好决定实际主题
-  if (theme === 'auto') {
-    actualTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  
-  document.documentElement.setAttribute('data-theme', actualTheme);
-  localStorage.setItem('flycode-theme', theme); // 存储用户选择（可能是 auto）
-  
-  // 更新图标显示
-  if (actualTheme === 'dark') {
-    if (themeIconSun) themeIconSun.style.display = 'block';
-    if (themeIconMoon) themeIconMoon.style.display = 'none';
-  } else {
-    if (themeIconSun) themeIconSun.style.display = 'none';
-    if (themeIconMoon) themeIconMoon.style.display = 'block';
+  // 更新按钮图标
+  if (themeIconSun && themeIconMoon) {
+    if (theme === 'dark') {
+      themeIconSun.style.display = 'block';
+      themeIconMoon.style.display = 'none';
+    } else {
+      themeIconSun.style.display = 'none';
+      themeIconMoon.style.display = 'block';
+    }
   }
 }
 
-// 初始化主题：优先取用户设置，否则默认跟随系统
-const savedTheme = localStorage.getItem('flycode-theme') || 'auto';
-applyTheme(savedTheme);
+// 初始化：优先读取用户设置，否则跟随系统
+const savedTheme = localStorage.getItem('flycode-theme');
+const initialTheme = savedTheme || getSystemTheme();
+applyTheme(initialTheme);
 
-// 监听系统主题变化（当用户设置为 auto 时生效）
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const currentSetting = localStorage.getItem('flycode-theme');
-  if (currentSetting === 'auto' || !currentSetting) {
-    applyTheme('auto');
+// 监听系统主题变化（仅在用户未手动设置时生效）
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (!localStorage.getItem('flycode-theme')) {
+    applyTheme(e.matches ? 'dark' : 'light');
   }
 });
 
-// 点击切换：浅色 → 深色 → 跟随系统 → 浅色
+// 点击切换按钮：浅色 ⇄ 深色
 themeToggleBtn?.addEventListener('click', () => {
-  const current = localStorage.getItem('flycode-theme') || 'auto';
-  let next;
-  
-  if (current === 'light' || current === 'auto') {
-    next = 'dark';
-  } else if (current === 'dark') {
-    next = 'light';
-  }
-  
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
   applyTheme(next);
 });
 
