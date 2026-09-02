@@ -1,5 +1,7 @@
 /* ==========================================================================
-   Flycode 智能双向主题切换引擎（修复系统深色模式锁死/切换点两次问题）
+   Flycode 三态主题引擎：浅色 → 深色 → 跟随系统 → 浅色…
+   配合 CSS 的 @media (prefers-color-scheme) 深色分支，彻底解决
+   系统深色模式下浏览器强制深色干预导致的"锁死"问题。
    ========================================================================== */
 (function() {
   const STORAGE_KEY = 'flycode-theme-choice'; // 'light' | 'dark' | 'auto'
@@ -9,19 +11,24 @@
   }
 
   function getSavedChoice() {
-    return localStorage.getItem(STORAGE_KEY) || 'auto';
+    try {
+      const v = localStorage.getItem(STORAGE_KEY);
+      return (v === 'light' || v === 'dark' || v === 'auto') ? v : 'auto';
+    } catch (_) { return 'auto'; }
   }
 
+  // 关键：切换到 light 时显式写 data-theme="light"，
+  // CSS 中 @media 分支带 :not([data-theme="light"]) 即失效，
+  // 浏览器强制深色滤镜也随之退出。
   function updateDOM(actualTheme, choice) {
-    // 强制设置 HTML 的 data-theme 属性（优先级最高）
-    document.documentElement.setAttribute('data-theme', actualTheme);
-    document.documentElement.className = `theme-${actualTheme}`;
-    document.documentElement.style.colorScheme = actualTheme;
-    
-    // 强制浏览器重新计算所有 CSS 变量（修复某些移动端浏览器不更新的问题）
-    document.body.style.display = 'none';
-    document.body.offsetHeight; // 触发 reflow
-    document.body.style.display = '';
+    const html = document.documentElement;
+
+    if (actualTheme === 'dark') {
+      html.setAttribute('data-theme', 'dark');
+    } else {
+      html.setAttribute('data-theme', 'light');
+    }
+    html.style.colorScheme = actualTheme;
 
     const sunIcon = document.querySelector('#theme-icon-sun');
     const moonIcon = document.querySelector('#theme-icon-moon');
@@ -38,61 +45,73 @@
     }
 
     if (toggleBtn) {
-      const stateDesc = choice === 'auto'
-        ? `跟随系统(${actualTheme === 'dark' ? '深色' : '浅色'})`
+      const modeName = choice === 'auto'
+        ? `跟随系统（${actualTheme === 'dark' ? '深色' : '浅色'}）`
         : (actualTheme === 'dark' ? '深色' : '浅色');
-      toggleBtn.setAttribute('title', `当前主题：${stateDesc} · 点击切换`);
+      toggleBtn.setAttribute('title', `当前：${modeName} · 点击切换`);
+      toggleBtn.setAttribute('aria-label', `当前主题：${modeName}，点击切换`);
     }
   }
 
-  function setChoice(newChoice) {
-    localStorage.setItem(STORAGE_KEY, newChoice);
-    const actual = newChoice === 'auto' ? getSystemTheme() : newChoice;
-    updateDOM(actual, newChoice);
+  function applyChoice(choice) {
+    try { localStorage.setItem(STORAGE_KEY, choice); } catch (_) {}
+    const actual = choice === 'auto' ? getSystemTheme() : choice;
+    updateDOM(actual, choice);
   }
 
-  // 1. 初始化主题（自执行立即可用）
-  const initialChoice = getSavedChoice();
-  const initialActual = initialChoice === 'auto' ? getSystemTheme() : initialChoice;
-  updateDOM(initialActual, initialChoice);
+  // Toast 提示
+  function toast(msg) {
+    const stack = document.querySelector('#toast-stack');
+    if (!stack) return;
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    stack.appendChild(el);
+    setTimeout(() => el.remove(), 1600);
+  }
 
-  // 2. 监听系统深浅色动态变化
+  // 初始化
+  updateDOM(
+    getSavedChoice() === 'auto' ? getSystemTheme() : getSavedChoice(),
+    getSavedChoice()
+  );
+
+  // 跟随系统模式时响应系统切换
   if (window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      const currentChoice = getSavedChoice();
-      if (currentChoice === 'auto') {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e) => {
+      if (getSavedChoice() === 'auto') {
         updateDOM(e.matches ? 'dark' : 'light', 'auto');
       }
-    });
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
   }
 
-  // 3. 点击切换逻辑：根据当前屏幕显示的实际主题做精准翻转
+  // 点击循环：light → dark → auto → light
   function handleToggle(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+
+    const current = getSavedChoice();
+    let next, tip;
+    if (current === 'light') {
+      next = 'dark';   tip = '已切换到深色模式';
+    } else if (current === 'dark') {
+      next = 'auto';   tip = '已切换为跟随系统';
+    } else {
+      next = 'light';  tip = '已切换到浅色模式';
     }
 
-    const currentActiveTheme = document.documentElement.getAttribute('data-theme') || getSystemTheme();
-    const nextTheme = (currentActiveTheme === 'dark') ? 'light' : 'dark';
+    applyChoice(next);
+    toast(tip);
 
-    setChoice(nextTheme);
-
-    if (navigator.vibrate) {
-      try { navigator.vibrate(12); } catch (_) {}
-    }
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
   }
 
-  // 手机端支持 pointerdown / touchend / click 多事件捕获，确保按一下秒切
   function bindButton() {
     const btn = document.querySelector('#theme-toggle');
-    if (btn) {
-      btn.onclick = handleToggle;
-      // 重新同步一次按钮状态
-      const choice = getSavedChoice();
-      const actual = choice === 'auto' ? getSystemTheme() : choice;
-      updateDOM(actual, choice);
-    }
+    if (!btn) return;
+    btn.onclick = handleToggle;
   }
 
   if (document.readyState === 'loading') {

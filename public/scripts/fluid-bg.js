@@ -82,6 +82,20 @@
     pointer.y = e.clientY;
   }, { passive: true });
 
+  // 关键修复：松手/取消/移出窗口时重置指针坐标，
+  // 否则手机端点击后 pointer 永远停留在点击处，粒子被持续吸引形成"残留引力团"
+  function releasePointer() {
+    pointer.x = -1000;
+    pointer.y = -1000;
+    pointer.px = -1000;
+    pointer.py = -1000;
+  }
+  window.addEventListener('pointerup', releasePointer, { passive: true });
+  window.addEventListener('pointercancel', releasePointer, { passive: true });
+  window.addEventListener('touchend', releasePointer, { passive: true });
+  window.addEventListener('blur', releasePointer);
+  document.documentElement.addEventListener('mouseleave', releasePointer);
+
   let time = 0;
   function animate() {
     requestAnimationFrame(animate);

@@ -27,46 +27,22 @@
   <!-- Three.js CDN 用于纯原生 3D WebGL 实时渲染 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   
-  <!-- 关键：内联同步主题脚本，必须在 CSS 加载前执行，防止 FOUC 和系统深色模式锁死 -->
+  <!-- 关键：内联同步主题脚本，必须在 CSS 加载前执行，防止 FOUC -->
   <script>
-    // 版本检测：强制清除旧缓存
+    // 主题初始化（light 必须显式写出，让 CSS 的 @media 深色分支失效）
     (function() {
-      const CURRENT_VERSION = '20260902-02';
-      const VERSION_KEY = 'flycode-version';
-      const savedVersion = sessionStorage.getItem(VERSION_KEY);
-      
-      if (savedVersion && savedVersion !== CURRENT_VERSION) {
-        // 版本不匹配，强制刷新
-        sessionStorage.setItem(VERSION_KEY, CURRENT_VERSION);
-        window.location.reload(true);
-        return;
-      }
-      
-      if (!savedVersion) {
-        sessionStorage.setItem(VERSION_KEY, CURRENT_VERSION);
-      }
-    })();
-    
-    // 主题初始化
-    (function() {
-      const STORAGE_KEY = 'flycode-theme-choice';
-      function getSystemTheme() {
-        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      const saved = localStorage.getItem(STORAGE_KEY);
-      const choice = (saved === 'light' || saved === 'dark' || saved === 'auto') ? saved : 'auto';
-      const actualTheme = (choice === 'auto') ? getSystemTheme() : choice;
-      
-      // 强制设置 data-theme 属性，确保优先级最高
-      document.documentElement.setAttribute('data-theme', actualTheme);
-      document.documentElement.style.colorScheme = actualTheme;
-      
-      // 将选择存回，确保后续脚本能读取
-      localStorage.setItem(STORAGE_KEY, choice);
+      var KEY = 'flycode-theme-choice';
+      var sys = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      var saved;
+      try { saved = localStorage.getItem(KEY); } catch (e) {}
+      var choice = (saved === 'light' || saved === 'dark' || saved === 'auto') ? saved : 'auto';
+      var actual = (choice === 'auto') ? sys : choice;
+      document.documentElement.setAttribute('data-theme', actual === 'dark' ? 'dark' : 'light');
+      document.documentElement.style.colorScheme = actual;
     })();
   </script>
   
-  <link rel="stylesheet" href="/styles.css?v=20260902-02">
+  <link rel="stylesheet" href="/styles.css?v=20260902-03">
 </head>
 <body>
   <!-- 动态流光背景与极光层 -->
@@ -367,8 +343,8 @@
   </div>
 
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
-  <script src="/scripts/theme.js?v=20260902-01"></script>
-  <script src="/scripts/fluid-bg.js?v=20260902-01" defer></script>
+  <script src="/scripts/theme.js?v=20260902-03"></script>
+  <script src="/scripts/fluid-bg.js?v=20260902-03" defer></script>
   <script src="/scripts/crystal.js?v=20260902-01" defer></script>
   <script src="/app.js?v=20260902-01" defer></script>
 </body>
