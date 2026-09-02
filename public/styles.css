@@ -1195,7 +1195,7 @@ html[data-theme="dark"] .theme-icon-dark { display: block; }
 
 /* 移动端与深浅色模式深度优化 */
 @media (max-width: 768px) {
-  .site-shell { padding: 0 16px; }
+  .site-shell { padding: 80px 16px 0; } /* 移动端也需要顶部留白 */
   .topbar-container { top: 12px; margin-bottom: 12px; }
   .topbar {
     padding: 0 16px;
