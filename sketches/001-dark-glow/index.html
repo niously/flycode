@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 A · 深色霓虹科技风</title>
+<style>
+:root{
+  --bg:#0c0e0a; --bg-soft:#141810; --card:#171c12;
+  --ink:#f2f5ea; --muted:#9aa38c; --line:#2a3122;
+  --acid:#d7f34b; --acid-dim:rgba(215,243,75,.14);
+  --glow:0 0 24px rgba(215,243,75,.35);
+  --radius:14px;
+  --font-display:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-mono:"Cascadia Code",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:var(--font-display);line-height:1.6;
+  overflow-x:hidden;
+}
+#stars{position:fixed;inset:0;z-index:0;pointer-events:none}
+.shell{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 20px}
+/* 顶栏 */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--ink);text-decoration:none}
+.brand-dot{width:10px;height:10px;border-radius:50%;background:var(--acid);box-shadow:var(--glow);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.4}}
+.nav{display:flex;gap:22px}
+.nav a{color:var(--muted);text-decoration:none;font-size:14px;transition:color .2s}
+.nav a:hover{color:var(--acid)}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:12px 22px;border-radius:999px;border:1px solid var(--acid);
+  background:transparent;color:var(--acid);font-size:14px;cursor:pointer;
+  transition:all .25s;text-decoration:none;
+}
+.btn:hover{background:var(--acid);color:#0c0e0a;box-shadow:var(--glow)}
+.btn-solid{background:var(--acid);color:#0c0e0a;font-weight:700}
+.btn-solid:hover{transform:translateY(-2px)}
+/* 阶段条 */
+.phase-bar{display:flex;align-items:center;gap:14px;padding:14px 18px;margin:26px 0 0;
+  border:1px solid var(--line);border-radius:999px;background:var(--bg-soft);font-size:13px}
+.phase-track{flex:1;height:4px;border-radius:99px;background:var(--line);overflow:hidden}
+.phase-fill{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acid),#8fb525);border-radius:99px;transition:width 1.4s cubic-bezier(.2,.8,.2,1)}
+/* HERO */
+.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:40px;padding:80px 0 60px;align-items:center}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.2em;color:var(--acid);text-transform:uppercase;margin-bottom:18px}
+h1{font-size:clamp(34px,5vw,56px);line-height:1.15;font-weight:800;letter-spacing:-.01em}
+h1 em{font-style:normal;color:var(--acid);text-shadow:0 0 30px rgba(215,243,75,.5)}
+.hero-desc{color:var(--muted);margin:22px 0 30px;max-width:46ch}
+.hero-actions{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+/* 问题板（3D 悬浮） */
+.board{
+  perspective:900px;
+}
+.board-card{
+  background:linear-gradient(160deg,var(--card),#101408);
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:28px;transition:transform .15s ease-out;transform-style:preserve-3d;
+  box-shadow:0 30px 60px rgba(0,0,0,.5);
+  position:relative;overflow:hidden;
+}
+.board-card::before{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(400px circle at var(--mx,50%) var(--my,50%),rgba(215,243,75,.12),transparent 60%)}
+.board-tag{font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;color:var(--muted)}
+.board-card h2{font-size:24px;margin:14px 0 10px;transform:translateZ(30px)}
+.board-card p{color:var(--muted);font-size:14px;transform:translateZ(20px)}
+.board-foot{display:flex;gap:24px;margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:13px;transform:translateZ(15px)}
+.board-foot b{color:var(--acid)}
+/* 数据 */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:26px 0 60px}
+.stat{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg-soft);transition:all .3s}
+.stat:hover{border-color:var(--acid);box-shadow:var(--glow);transform:translateY(-4px)}
+.stat b{display:block;font-size:38px;font-family:var(--font-mono);color:var(--acid)}
+.stat span{color:var(--muted);font-size:13px}
+/* 提案卡片 */
+.section-head{display:flex;justify-content:space-between;align-items:end;margin:40px 0 20px}
+.section-head h2{font-size:28px}
+.section-head p{color:var(--muted);font-size:13px}
+.cards{display:grid;gap:16px;padding-bottom:60px}
+.pcard{
+  display:flex;justify-content:space-between;gap:16px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 22px;transition:all .25s;cursor:default;
+}
+.pcard:hover{border-color:rgba(215,243,75,.6);transform:translateY(-3px) scale(1.005);box-shadow:0 12px 40px rgba(215,243,75,.08)}
+.pcard h3{font-size:16px;margin-bottom:6px}
+.pcard p{color:var(--muted);font-size:13px;max-width:52ch}
+.vote{flex-shrink:0;text-align:center;min-width:70px}
+.vote b{display:block;font-family:var(--font-mono);font-size:26px;color:var(--acid)}
+.vote span{font-size:11px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.1em}
+/* 时间线 */
+.timeline{padding-bottom:80px}
+.tl-item{display:flex;gap:18px;padding:18px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.tl-item time{font-family:var(--font-mono);color:var(--acid);font-size:12px;min-width:86px}
+.tl-item b{margin-right:10px}
+/* 底部 CTA */
+.cta{border:1px solid var(--line);border-radius:20px;padding:60px 40px;text-align:center;
+  background:linear-gradient(180deg,var(--bg-soft),#0a0c07);margin-bottom:40px;position:relative;overflow:hidden}
+.cta::after{content:"";position:absolute;inset:0;background:radial-gradient(500px circle at 50% 120%,rgba(215,243,75,.12),transparent 60%)}
+.cta h2{font-size:32px;margin-bottom:8px}
+.cta p{color:var(--muted);margin-bottom:26px}
+footer{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;padding:30px 0 50px;font-family:var(--font-mono)}
+/* 入场动画 */
+.reveal{opacity:0;transform:translateY(26px);transition:all .8s cubic-bezier(.2,.8,.2,1)}
+.reveal.in{opacity:1;transform:none}
+@media(max-width:820px){
+  .hero{grid-template-columns:1fr;padding:50px 0 40px}
+  .nav{display:none}
+  .stats{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="shell">
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-dot"></span>Flycode <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">IN&nbsp;PROGRESS</span></a>
+    <nav class="nav"><a href="#props">提案</a><a href="#tl">成长记录</a><a href="#cta">参与</a></nav>
+    <a class="btn" href="#">管理入口 ↗</a>
+  </header>
+
+  <div class="phase-bar reveal">
+    <span style="color:var(--acid);font-family:var(--font-mono)">●</span>
+    <span>公开共创 · ROUND 01</span>
+    <span class="phase-track"><span class="phase-fill" id="fill"></span></span>
+    <span style="color:var(--muted)">提案收集中</span>
+  </div>
+
+  <section class="hero">
+    <div>
+      <p class="eyebrow reveal">A WEBSITE THAT GROWS WITH YOU</p>
+      <h1 class="reveal">功能、内容和方向，<br><em>由我们一起决定。</em></h1>
+      <p class="hero-desc reveal">Flycode 从一个想法开始。你可以提出想做的功能、想看的内容，或者完全不同的发展方向。每一轮参与，都会让它更接近它真正要成为的样子。</p>
+      <div class="hero-actions reveal">
+        <a class="btn btn-solid" href="#props">提出你的想法 ↗</a>
+        <a class="btn" href="#tl">看看它怎样长出来</a>
+      </div>
+    </div>
+    <div class="board reveal">
+      <div class="board-card" id="tilt">
+        <div class="board-tag">NOW DISCUSSING · 01/01</div>
+        <h2>你希望它先做什么？</h2>
+        <p>提出一个具体的功能、内容或发展方向，告诉我们为什么它值得优先考虑。</p>
+        <div class="board-foot">
+          <div>截止时间<br><b>开放中</b></div>
+          <div>当前状态<br><b>提案收集中</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat reveal"><b id="n1">0</b><span>收到的提案</span></div>
+    <div class="stat reveal"><b id="n2">0</b><span>参与者</span></div>
+    <div class="stat reveal"><b id="n3">1</b><span>进行中的轮次</span></div>
+  </section>
+
+  <section id="props">
+    <div class="section-head reveal">
+      <h2>大家正在提出什么</h2>
+      <p>通过审核的想法会出现在这里 · 按最新排序</p>
+    </div>
+    <div class="cards">
+      <div class="pcard reveal">
+        <div><h3>增加一个项目成长地图</h3><p>把每一轮的决定和进展画在一张时间轴地图上，新来的朋友一眼就能看懂这个项目走到哪了。</p></div>
+        <div class="vote"><b>12</b><span>VOTES</span></div>
+      </div>
+      <div class="pcard reveal">
+        <div><h3>提案支持图片参考</h3><p>有的想法光用文字说不清楚，允许附一张截图或草图会更直观。</p></div>
+        <div class="vote"><b>7</b><span>VOTES</span></div>
+      </div>
+      <div class="pcard reveal">
+        <div><h3>每周精选回顾邮件</h3><p>不想天天刷网站的话，可以订阅一封每周汇总，看看这周有哪些新提案。</p></div>
+        <div class="vote"><b>5</b><span>VOTES</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="timeline" id="tl">
+    <div class="section-head reveal"><h2>成长记录</h2></div>
+    <div class="tl-item reveal"><time>08-28</time><div><b>Flycode 上线第一轮</b>提交、审核、投票全流程开放，第一轮问题发布。</div></div>
+    <div class="tl-item reveal"><time>08-31</time><div><b>域名切换完成</b>flycode.online 正式启用，大陆访问更稳定。</div></div>
+  </section>
+
+  <section class="cta reveal" id="cta">
+    <p class="eyebrow">FLYCODE IS STILL BECOMING</p>
+    <h2>下一步，由你来写。</h2>
+    <p>不需要懂代码，写下你的第一个提案就行。</p>
+    <a class="btn btn-solid" href="#">参与第一轮 ↗</a>
+  </section>
+
+  <footer><span>FLYCODE / 0.1</span><span>方案 A · 深色霓虹（设计稿）</span></footer>
+</div>
+
+<script>
+/* 粒子背景 */
+const cv=document.getElementById('stars'),cx=cv.getContext('2d');let ps=[];
+function rs(){cv.width=innerWidth;cv.height=innerHeight;
+  ps=Array.from({length:Math.min(90,innerWidth/14)},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,r:Math.random()*1.6+.4,s:Math.random()*.35+.08,a:Math.random()}));}
+rs();addEventListener('resize',rs);
+(function loop(){cx.clearRect(0,0,cv.width,cv.height);
+  for(const p of ps){p.y-=p.s;p.a+=.02;if(p.y<-4){p.y=cv.height+4;p.x=Math.random()*cv.width}
+    cx.beginPath();cx.arc(p.x,p.y,p.r,0,7);cx.fillStyle=`rgba(215,243,75,${.25+Math.sin(p.a)*.2})`;cx.fill();}
+  requestAnimationFrame(loop);})();
+/* 3D 倾斜 */
+const t=document.getElementById('tilt');
+t.addEventListener('mousemove',e=>{const r=t.getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+  t.style.transform=`rotateY(${x*10}deg) rotateX(${-y*8}deg)`;
+  t.style.setProperty('--mx',(x*100+50)+'%');t.style.setProperty('--my',(y*100+50)+'%');});
+t.addEventListener('mouseleave',()=>t.style.transform='');
+/* 入场 */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+/* 数字滚动 */
+function count(el,to){let s=null;const d=1200;
+  requestAnimationFrame(function f(ts){s??=ts;const p=Math.min((ts-s)/d,1);
+    el.textContent=Math.round(to*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(f);});}
+const nio=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){count(e.target,+e.target.dataset.n);nio.unobserve(e.target)}}));
+document.getElementById('n1').dataset.n=23;document.getElementById('n2').dataset.n=11;
+['n1','n2','n3'].forEach(id=>nio.observe(document.getElementById(id)));
+setTimeout(()=>document.getElementById('fill').style.width='38%',400);
+</script>
+</body>
+</html>

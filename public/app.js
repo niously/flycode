@@ -79,7 +79,7 @@ const els = {
 };
 
 const DRAFT_KEY = 'flycode-proposal-draft';
-const originalSubmitText = '提交提案 <span aria-hidden="true">↗</span>';
+const originalSubmitText = '<span class="btn-sparkle">✦</span> 提交提案 <span aria-hidden="true">↗</span>';
 const selectedProposals = {
   pending: new Set(),
   rejected: new Set()
@@ -100,651 +100,424 @@ function createVisitorId() {
   return `visitor-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>'"]/g, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;'
-  }[character]));
+function escapeHtml(str = '') {
+  return String(str)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
-function formatDate(value, withYear = false) {
-  if (!value) return '开放中';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: withYear ? 'numeric' : undefined,
-    month: '2-digit',
-    day: '2-digit'
-  }).format(date);
+function formatDate(iso) {
+  if (!iso) return '待定';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function formatDateTime(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(date);
+function formatRelative(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  return `${days} 天前`;
 }
 
-function currentPhase() {
-  return state.public?.currentPhase || state.admin?.currentPhase;
+function showToast(message, type = 'info') {
+  if (!els.toastStack) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  els.toastStack.appendChild(toast);
+  window.setTimeout(() => {
+    toast.remove();
+  }, 3200);
+}
+
+function setMessage(target, text, isError = false) {
+  if (!target) return;
+  target.textContent = text;
+  target.className = `form-message ${isError ? 'error' : (text ? 'success' : '')}`;
 }
 
 async function api(path, options = {}) {
   const headers = {
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-    'X-Visitor-Id': state.visitorId,
+    'Content-Type': 'application/json',
     ...(options.headers || {})
   };
-  const response = await fetch(path, { ...options, headers });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `请求失败（${response.status}）`);
-  return payload;
+  if (state.adminKey) {
+    headers['x-flycode-admin-key'] = state.adminKey;
+  }
+  const res = await fetch(path, { credentials: 'same-origin', ...options, headers });
+  const data = await res.json().catch(() => ({ ok: false, error: '网络返回异常' }));
+  if (!res.ok && !data.error) {
+    data.error = `HTTP ${res.status}`;
+  }
+  return data;
 }
 
-async function loadPublic(showError = true) {
-  try {
-    state.public = await api('/api/state');
-    renderPublic();
-    if (state.adminKey && (!state.admin || !els.adminModal.hidden)) await loadAdmin(false);
-  } catch (error) {
-    if (showError) showToast(error.message, true);
+function updateCounters() {
+  if (els.titleCounter && els.proposalTitle) {
+    els.titleCounter.textContent = `${els.proposalTitle.value.length}/80`;
+  }
+  if (els.descriptionCounter && els.proposalDescription) {
+    const len = els.proposalDescription.value.length;
+    els.descriptionCounter.textContent = `${len}/1200 · 至少 10 个字`;
   }
 }
 
-async function loadAdmin(showError = true) {
-  if (!state.adminKey) return false;
+function saveDraft() {
+  if (!els.proposalTitle || !els.proposalDescription) return;
+  const draft = {
+    title: els.proposalTitle.value,
+    description: els.proposalDescription.value,
+    author: document.querySelector('#proposal-author')?.value || '',
+    link: document.querySelector('#proposal-link')?.value || ''
+  };
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+}
+
+function loadDraft() {
+  const raw = localStorage.getItem(DRAFT_KEY);
+  if (!raw) return;
   try {
-    state.admin = await api('/api/admin/state', { headers: { 'X-Admin-Key': state.adminKey } });
-    renderAdmin();
-    return true;
-  } catch (error) {
-    state.admin = null;
-    sessionStorage.removeItem('flycode-admin-key');
-    state.adminKey = '';
-    if (showError) setMessage(els.adminLoginMessage, error.message, true);
-    return false;
+    const draft = JSON.parse(raw);
+    if (els.proposalTitle && draft.title) els.proposalTitle.value = draft.title;
+    if (els.proposalDescription && draft.description) els.proposalDescription.value = draft.description;
+    const authorEl = document.querySelector('#proposal-author');
+    if (authorEl && draft.author) authorEl.value = draft.author;
+    const linkEl = document.querySelector('#proposal-link');
+    if (linkEl && draft.link) linkEl.value = draft.link;
+    updateCounters();
+  } catch {}
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+  if (els.proposalForm) els.proposalForm.reset();
+  updateCounters();
+}
+
+async function loadPublic(showFeedback = true) {
+  const res = await api(`/api/state?visitor_id=${encodeURIComponent(state.visitorId)}`);
+  if (!res.ok) {
+    if (els.lastSync && showFeedback) els.lastSync.textContent = '已同步 · 离线模式';
+    return;
+  }
+  state.public = res;
+  renderPublic();
+  if (els.lastSync) {
+    els.lastSync.textContent = `已同步 · ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`;
   }
 }
 
 function renderPublic() {
   const data = state.public;
   if (!data) return;
-  const phase = data.currentPhase;
-  const proposals = data.proposals || [];
-  const phaseNumber = String(phase?.number || 1).padStart(2, '0');
-  const isVoting = phase?.status === 'voting';
-  const chosen = phase?.chosenProposalId ? proposals.find((item) => item.id === phase.chosenProposalId) : null;
 
-  els.roundNumber.textContent = `ROUND ${phaseNumber}`;
-  els.roundStatus.textContent = statusText[phase?.status] || phase?.status || '准备中';
-  els.roundTrackFill.style.width = `${phaseProgress(phase?.status)}%`;
-  els.boardPhaseId.textContent = `${phaseNumber} / ${String(data.phases?.length || 1).padStart(2, '0')}`;
-  els.currentQuestion.textContent = phase?.question || '下一步想让 Flycode 做什么？';
-  els.currentPhaseDescription.textContent = isVoting
-    ? '候选提案已经整理好，请选出你认为最值得先做的一个。'
-    : phase?.status === 'execution'
-      ? '这一轮已经做出决定，接下来会把选择变成真实的改变。'
-      : '提出一个具体的功能、内容或发展方向，告诉我们为什么它值得优先考虑。';
-  els.phaseDeadline.textContent = phase?.deadline ? formatDate(phase.deadline) : '开放中';
-  els.phaseState.textContent = statusText[phase?.status] || '准备中';
-  els.statProposals.textContent = data.stats?.proposalCount ?? proposals.length;
-  els.statParticipants.textContent = data.stats?.participantCount ?? 0;
-  els.statRounds.textContent = data.stats?.completedRounds || 1;
-  els.proposalCountLabel.textContent = `${proposals.length} 个公开提案`;
-  els.listModeLabel.textContent = isVoting ? '投票阶段已开启' : '按最新提交排序';
-  els.lastSync.textContent = `最近更新 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date())}`;
+  const currentPhase = data.current_phase || {};
+  if (els.roundNumber) els.roundNumber.textContent = `ROUND ${String(currentPhase.id || 1).padStart(2, '0')}`;
+  if (els.roundStatus) els.roundStatus.textContent = statusText[currentPhase.status] || currentPhase.status || '进行中';
+  if (els.boardPhaseId) els.boardPhaseId.textContent = `${String(currentPhase.id || 1).padStart(2, '0')} / ${String(data.summary?.total_rounds || 1).padStart(2, '0')}`;
+  if (els.currentQuestion) els.currentQuestion.textContent = currentPhase.question || '你希望它先做什么？';
+  if (els.currentPhaseDescription) els.currentPhaseDescription.textContent = currentPhase.title || '提出一个具体想法，告诉我们为什么它值得优先考虑。';
+  if (els.phaseDeadline) els.phaseDeadline.textContent = currentPhase.deadline ? formatDate(currentPhase.deadline) : '开放中';
+  if (els.phaseState) els.phaseState.textContent = statusText[currentPhase.status] || currentPhase.status || '提案收集中';
 
-  renderProposals(proposals, isVoting, phase);
-  renderDecision(chosen, phase);
-  renderTimeline(data.updates || []);
-  updateSubmissionAvailability(phase);
-}
-
-function phaseProgress(status) {
-  return { submitting: 25, voting: 52, execution: 78, archived: 100 }[status] || 15;
-}
-
-function updateSubmissionAvailability(phase) {
-  const open = phase?.status === 'submitting';
-  const inputs = els.proposalForm.querySelectorAll('input:not(.honeypot), textarea');
-  inputs.forEach((input) => { input.disabled = !open; });
-  els.proposalSubmit.disabled = !open;
-  if (!open) {
-    els.proposalSubmit.innerHTML = `${escapeHtml(statusText[phase?.status] || '本轮已关闭')} <span aria-hidden="true">·</span>`;
-  } else {
-    els.proposalSubmit.innerHTML = originalSubmitText;
+  if (els.roundTrackFill) {
+    const progressMap = { submitting: '33%', voting: '66%', execution: '100%', archived: '100%' };
+    els.roundTrackFill.style.width = progressMap[currentPhase.status] || '33%';
   }
+
+  if (els.statProposals) els.statProposals.textContent = data.summary?.total_proposals ?? (data.proposals || []).length;
+  if (els.statParticipants) els.statParticipants.textContent = data.summary?.total_participants ?? 0;
+  if (els.statRounds) els.statRounds.textContent = data.summary?.total_rounds ?? 1;
+
+  renderProposals(data.proposals || [], currentPhase.status);
+  renderDecision(currentPhase);
+  renderTimeline(data.timeline || []);
 }
 
-function updateCharCounters() {
-  const titleLength = els.proposalTitle.value.length;
-  const descLength = els.proposalDescription.value.length;
-  els.titleCounter.textContent = `${titleLength}/80`;
-  els.descriptionCounter.textContent = `${descLength}/1200${descLength < 10 ? ' · 至少 10 个字' : ''}`;
-  els.descriptionCounter.style.color = descLength < 10 ? 'var(--coral)' : '';
-}
+function renderProposals(proposals, phaseStatus) {
+  if (!els.proposalList) return;
+  const isVoting = phaseStatus === 'voting';
+  if (els.proposalCountLabel) els.proposalCountLabel.textContent = `${proposals.length} 个公开提案`;
+  if (els.listModeLabel) els.listModeLabel.textContent = isVoting ? '按投票热度排序' : '按最新提交排序';
 
-function saveDraft() {
-  const draft = {
-    title: els.proposalTitle.value,
-    description: els.proposalDescription.value,
-    author: document.querySelector('#proposal-author').value,
-    link: document.querySelector('#proposal-link').value,
-    savedAt: Date.now()
-  };
-  if (draft.title || draft.description) {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  }
-}
-
-function loadDraft() {
-  const saved = localStorage.getItem(DRAFT_KEY);
-  if (!saved) return;
-  try {
-    const draft = JSON.parse(saved);
-    const age = Date.now() - draft.savedAt;
-    if (age > 7 * 24 * 60 * 60 * 1000) {
-      localStorage.removeItem(DRAFT_KEY);
-      return;
-    }
-    if (draft.title || draft.description) {
-      els.proposalTitle.value = draft.title || '';
-      els.proposalDescription.value = draft.description || '';
-      document.querySelector('#proposal-author').value = draft.author || '';
-      document.querySelector('#proposal-link').value = draft.link || '';
-      updateCharCounters();
-      showToast('已恢复上次未提交的草稿');
-    }
-  } catch {
-    localStorage.removeItem(DRAFT_KEY);
-  }
-}
-
-function clearDraft() {
-  localStorage.removeItem(DRAFT_KEY);
-}
-
-function updateBatchActionsState() {
-  const pendingCount = selectedProposals.pending.size;
-  const rejectedCount = selectedProposals.rejected.size;
-  if (els.batchApprove) els.batchApprove.disabled = pendingCount === 0;
-  if (els.batchReject) els.batchReject.disabled = pendingCount === 0;
-  if (els.batchDeletePending) els.batchDeletePending.disabled = pendingCount === 0;
-  if (els.batchRereview) els.batchRereview.disabled = rejectedCount === 0;
-  if (els.batchDeleteRejected) els.batchDeleteRejected.disabled = rejectedCount === 0;
-  if (els.selectAllPending) els.selectAllPending.checked = pendingCount > 0 && pendingCount === els.adminProposals.querySelectorAll('.proposal-checkbox').length;
-  if (els.selectAllRejected) els.selectAllRejected.checked = rejectedCount > 0 && rejectedCount === els.rejectedProposals.querySelectorAll('.proposal-checkbox').length;
-}
-
-async function batchReviewAction(action, ids, message) {
-  if (!ids.length) return;
-  if (!window.confirm(`确定要${message} ${ids.length} 个提案吗？`)) return;
-  try {
-    await api('/api/admin/proposals/batch', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': state.adminKey },
-      body: JSON.stringify({ ids, action })
-    });
-    selectedProposals.pending.clear();
-    selectedProposals.rejected.clear();
-    showToast(`已${message} ${ids.length} 个提案。`);
-    await loadAdmin(false);
-    state.public = await api('/api/state');
-    renderPublic();
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-function renderReviewList(container, proposals, type) {
-  if (!proposals.length) {
-    container.innerHTML = '<p class="admin-empty review-empty">这里暂时没有提案。</p>';
+  if (proposals.length === 0) {
+    els.proposalList.innerHTML = '';
+    if (els.proposalEmpty) els.proposalEmpty.hidden = false;
     return;
   }
-  container.innerHTML = proposals.map((proposal, index) => `
-    <article class="admin-proposal-row review-proposal-row">
-      ${type === 'pending' || type === 'rejected' ? `<label class="review-check"><input type="checkbox" class="proposal-checkbox" data-type="${type}" data-id="${escapeHtml(proposal.id)}" ${selectedProposals[type].has(proposal.id) ? 'checked' : ''}><span class="sr-only">选择 ${escapeHtml(proposal.title)}</span></label>` : '<span class="review-check-spacer" aria-hidden="true"></span>'}
-      <div class="review-proposal-content">
-        <div class="review-proposal-topline"><span class="proposal-number">${String(index + 1).padStart(2, '0')}</span><span class="review-status ${type}">${statusText[type]}</span></div>
-        <h4>${escapeHtml(proposal.title)}</h4>
-        <p>${escapeHtml(proposal.description)}</p>
-        <div class="proposal-meta"><span>${escapeHtml(proposal.author || '匿名参与者')}</span><span>${formatDateTime(proposal.createdAt)}</span></div>
+
+  if (els.proposalEmpty) els.proposalEmpty.hidden = true;
+  els.proposalList.innerHTML = proposals.map((p, idx) => {
+    const voted = Boolean(p.user_has_voted);
+    const voteBtn = isVoting
+      ? `<div class="proposal-vote">
+          <button class="vote-btn ${voted ? 'active' : ''}" type="button" data-vote-id="${escapeHtml(p.id)}">
+            <span aria-hidden="true">${voted ? '✓' : '▲'}</span>
+            <span>${p.votes || 0}</span>
+          </button>
+        </div>`
+      : `<div class="proposal-vote"><span class="proposal-index">#${String(idx + 1).padStart(2, '0')}</span></div>`;
+
+    const linkHtml = p.link ? `<a class="proposal-link-pill" href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer">参考链接 ↗</a>` : '';
+
+    return `<article class="proposal-card" data-card-id="${escapeHtml(p.id)}">
+      <span class="proposal-index">0${idx + 1}</span>
+      <div class="proposal-body">
+        <h3>${escapeHtml(p.title)}</h3>
+        <p>${escapeHtml(p.description)}</p>
+        <div class="proposal-meta">
+          <span class="proposal-author">${escapeHtml(p.author || '匿名共创者')}</span>
+          <span>${formatRelative(p.created_at)}</span>
+          ${linkHtml}
+        </div>
       </div>
-      ${type === 'pending' ? '<div class="admin-row-actions"><button class="small-button approve" type="button" data-review-id="' + escapeHtml(proposal.id) + '" data-review-status="approved">通过</button><button class="small-button reject" type="button" data-review-id="' + escapeHtml(proposal.id) + '" data-review-status="rejected">不采用</button></div>' : ''}
-    </article>`).join('');
+      ${voteBtn}
+    </article>`;
+  }).join('');
 }
 
-function renderAdminProposals(proposals) {
-  const pending = proposals.filter((proposal) => proposal.status === 'pending');
-  const approved = proposals.filter((proposal) => proposal.status === 'approved');
-  const rejected = proposals.filter((proposal) => proposal.status === 'rejected');
-  const pendingIds = new Set(pending.map((proposal) => proposal.id));
-  const rejectedIds = new Set(rejected.map((proposal) => proposal.id));
-  selectedProposals.pending.forEach((id) => {
-    if (!pendingIds.has(id)) selectedProposals.pending.delete(id);
-  });
-  selectedProposals.rejected.forEach((id) => {
-    if (!rejectedIds.has(id)) selectedProposals.rejected.delete(id);
-  });
-  els.pendingCount.textContent = `${pending.length} 条待处理`;
-  if (els.pendingTabCount) els.pendingTabCount.textContent = pending.length;
-  if (els.approvedTabCount) els.approvedTabCount.textContent = approved.length;
-  if (els.rejectedTabCount) els.rejectedTabCount.textContent = rejected.length;
-  renderReviewList(els.adminProposals, pending, 'pending');
-  renderReviewList(els.approvedProposals, approved, 'approved');
-  renderReviewList(els.rejectedProposals, rejected, 'rejected');
-  updateBatchActionsState();
-}
-
-function renderProposals(proposals, isVoting, phase) {
-  els.proposalList.innerHTML = '';
-  els.proposalEmpty.hidden = proposals.length > 0;
-  if (!proposals.length) return;
-
-  const candidateIds = new Set(state.public?.voting?.candidateIds || phase?.candidates || []);
-  const alreadyVoted = Boolean(state.public?.voting?.hasVoted);
-  proposals.forEach((proposal, index) => {
-    const card = document.createElement('article');
-    const candidate = isVoting && candidateIds.has(proposal.id);
-    card.className = 'proposal-card';
-    card.innerHTML = `
-      <div class="proposal-number">${String(index + 1).padStart(2, '0')}</div>
-      <div>
-        <h3>${escapeHtml(proposal.title)}</h3>
-        <p>${escapeHtml(proposal.description)}</p>
-        ${proposal.link ? `<a class="proposal-link" href="${escapeHtml(proposal.link)}" target="_blank" rel="noreferrer">查看参考链接 ↗</a>` : ''}
-        <div class="proposal-meta"><span class="proposal-status ${candidate ? 'active' : ''}">${candidate ? '本轮候选' : '已公开'}</span><span>由 ${escapeHtml(proposal.author || '匿名参与者')} 提出</span><span>${formatDateTime(proposal.createdAt)}</span></div>
-      </div>
-      <div class="proposal-vote">
-        <span class="vote-count">${proposal.voteCount || 0} 票</span>
-        ${candidate ? `<button class="vote-button" type="button" data-vote-id="${escapeHtml(proposal.id)}" ${alreadyVoted ? 'disabled' : ''}>${alreadyVoted ? '本轮已投票' : '投给它'}</button>` : ''}
-      </div>`;
-    els.proposalList.appendChild(card);
-  });
-}
-
-function renderDecision(chosen, phase) {
-  if (!chosen || !phase?.decidedAt) {
+function renderDecision(phase) {
+  if (!els.decisionSection || !els.decisionStrip) return;
+  if (!phase.decision && phase.status !== 'execution' && phase.status !== 'archived') {
     els.decisionSection.hidden = true;
-    els.decisionStrip.innerHTML = '';
     return;
   }
   els.decisionSection.hidden = false;
-  els.decisionStrip.innerHTML = `
-    <div class="decision-item">
-      <div class="proposal-number">${String(phase.number).padStart(2, '0')}</div>
-      <div><h3>${escapeHtml(chosen.title)}</h3><p>${escapeHtml(phase.decisionNote || '本轮决定已公布，项目进入执行阶段。')}</p></div>
-      <span class="decision-badge">已进入执行</span>
-    </div>`;
+  els.decisionStrip.innerHTML = `<div class="decision-item">
+    <div class="decision-badge">EXECUTING</div>
+    <div class="decision-content">
+      <h3>${escapeHtml(phase.decision_title || phase.title || '本轮执行目标')}</h3>
+      <p>${escapeHtml(phase.decision_note || phase.question || '正在全力研发落地中。')}</p>
+    </div>
+  </div>`;
 }
 
-function renderTimeline(updates) {
-  if (!updates.length) {
-    els.timelineList.innerHTML = '<p class="admin-empty">还没有成长记录。</p>';
+function renderTimeline(timeline) {
+  if (!els.timelineList) return;
+  if (timeline.length === 0) {
+    els.timelineList.innerHTML = '<p class="admin-empty">还没有成长记录。每一轮决策与新功能发布都会沉淀在这里。</p>';
     return;
   }
-  els.timelineList.innerHTML = updates.map((update) => `
+  els.timelineList.innerHTML = timeline.map(entry => `
     <article class="timeline-entry">
-      <time class="timeline-date">${formatDateTime(update.createdAt)}</time>
-      <div><h3>${escapeHtml(update.title)}</h3><p>${escapeHtml(update.body)}</p></div>
-    </article>`).join('');
+      <time class="timeline-date">${formatDate(entry.created_at)}</time>
+      <div class="timeline-body">
+        <h3>${escapeHtml(entry.title)}</h3>
+        <p>${escapeHtml(entry.body)}</p>
+      </div>
+    </article>
+  `).join('');
+}
+
+// 投票交互与粒子浮动
+els.proposalList?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-vote-id]');
+  if (!btn) return;
+  const id = btn.dataset.voteId;
+  btn.disabled = true;
+
+  // 触发点击波纹
+  createRipple(e, btn);
+
+  const res = await api('/api/vote', {
+    method: 'POST',
+    body: JSON.stringify({ proposal_id: id, visitor_id: state.visitorId })
+  });
+  if (res.ok) {
+    // 弹出 +1 绿色向上飞升粒子
+    spawnVoteFlyParticle(e.clientX, e.clientY);
+    showToast(res.message || '投票已记录！');
+    await loadPublic(false);
+  } else {
+    showToast(res.error || '投票失败', 'error');
+    btn.disabled = false;
+  }
+});
+
+function createRipple(event, element) {
+  const circle = document.createElement('span');
+  const diameter = Math.max(element.clientWidth, element.clientHeight);
+  const radius = diameter / 2;
+  const rect = element.getBoundingClientRect();
+  circle.style.width = circle.style.height = `${diameter}px`;
+  circle.style.left = `${event.clientX - rect.left - radius}px`;
+  circle.style.top = `${event.clientY - rect.top - radius}px`;
+  circle.classList.add('btn-ripple');
+  element.appendChild(circle);
+  setTimeout(() => circle.remove(), 600);
+}
+
+function spawnVoteFlyParticle(x, y) {
+  const p = document.createElement('div');
+  p.className = 'vote-fly-particle';
+  p.textContent = '+1 ✦';
+  p.style.left = `${x}px`;
+  p.style.top = `${y}px`;
+  document.body.appendChild(p);
+  setTimeout(() => p.remove(), 900);
+}
+
+// 鼠标聚光灯跟随
+const cursorGlow = document.querySelector('#cursor-glow');
+if (cursorGlow) {
+  window.addEventListener('mousemove', (e) => {
+    cursorGlow.style.left = `${e.clientX}px`;
+    cursorGlow.style.top = `${e.clientY}px`;
+  });
+}
+
+// 投稿提交
+els.proposalForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (document.querySelector('#proposal-website')?.value) return; // 防爬虫蜜罐
+  const title = els.proposalTitle.value.trim();
+  const description = els.proposalDescription.value.trim();
+  const author = document.querySelector('#proposal-author')?.value.trim() || '';
+  const link = document.querySelector('#proposal-link')?.value.trim() || '';
+
+  if (title.length < 2) return setMessage(els.proposalMessage, '标题至少需要 2 个字。', true);
+  if (description.length < 10) return setMessage(els.proposalMessage, '描述至少需要 10 个字。', true);
+
+  els.proposalSubmit.disabled = true;
+  els.proposalSubmit.innerHTML = '正在提交...';
+
+  const res = await api('/api/proposals', {
+    method: 'POST',
+    body: JSON.stringify({ title, description, author, link, visitor_id: state.visitorId })
+  });
+
+  els.proposalSubmit.disabled = false;
+  els.proposalSubmit.innerHTML = originalSubmitText;
+
+  if (res.ok) {
+    clearDraft();
+    setMessage(els.proposalMessage, '提案提交成功！将在审核通过后公开展示。');
+    showToast('提案已成功提交！');
+  } else {
+    setMessage(els.proposalMessage, res.error || '提交失败，请重试。', true);
+  }
+});
+
+els.proposalTitle?.addEventListener('input', () => { updateCounters(); saveDraft(); });
+els.proposalDescription?.addEventListener('input', () => { updateCounters(); saveDraft(); });
+
+// 管理员工作台逻辑
+async function loadAdmin(showFeedback = true) {
+  const res = await api('/api/admin/state');
+  if (!res.ok) return false;
+  state.admin = res;
+  renderAdmin();
+  return true;
 }
 
 function renderAdmin() {
-  const data = state.admin;
-  if (!data) return;
+  if (!state.admin) return;
   els.adminLoginView.hidden = true;
   els.adminDashboard.hidden = false;
-  const allProposals = data.allProposals || [];
-  const pending = allProposals.filter((proposal) => proposal.status === 'pending');
-  const approved = allProposals.filter((proposal) => proposal.status === 'approved');
-  const rejected = allProposals.filter((proposal) => proposal.status === 'rejected');
-  const phase = data.currentPhase;
-  els.adminSummary.innerHTML = `
-    <div class="admin-summary-item"><strong>${allProposals.length}</strong><span>全部提案</span></div>
-    <div class="admin-summary-item"><strong>${pending.length}</strong><span>待审核</span></div>
-    <div class="admin-summary-item"><strong>${data.stats?.participantCount || 0}</strong><span>投票参与者</span></div>`;
-  els.adminCurrentStatus.textContent = statusText[phase?.status] || '';
-  renderAdminProposals(allProposals);
-  renderPhaseActions(phase, data);
-}
 
-function renderPhaseActions(phase, data) {
-  if (!phase) return;
-  const approved = (data.allProposals || []).filter((proposal) => proposal.phaseId === phase.id && proposal.status === 'approved');
-  const candidateIds = data.voting?.candidateIds || phase.candidates || [];
-  const candidates = data.decisionCandidates?.length
-    ? data.decisionCandidates
-    : candidateIds.length
-      ? approved.filter((proposal) => candidateIds.includes(proposal.id))
-      : approved;
-  els.phaseActions.innerHTML = '';
-  els.decisionForm.hidden = true;
-  if (phase.status === 'submitting') {
-    els.phaseActions.innerHTML = `<button class="phase-action" type="button" data-phase-status="voting" ${approved.length ? '' : 'disabled'}>审核完成，开启投票</button><span class="admin-empty">${approved.length ? `已有 ${approved.length} 个通过的提案` : '至少通过一个提案后才能开启投票'}</span>`;
-  } else if (phase.status === 'voting') {
-    els.phaseActions.innerHTML = candidates.length
-      ? '<span class="admin-empty">投票进行中。选择一个候选提案并公布决定。</span><button class="phase-action secondary" type="button" data-withdraw-voting>撤回投票，重新审核</button>'
-      : '<span class="admin-empty error">当前没有可决定的候选提案，请刷新工作台并检查已公开提案。</span>';
-    els.decisionForm.hidden = candidates.length === 0;
-    els.decisionProposal.innerHTML = candidates.length
-      ? candidates.map((proposal) => `<option value="${escapeHtml(proposal.id)}">${escapeHtml(proposal.title)}（${proposal.voteCount || 0} 票）</option>`).join('')
-      : '<option value="">暂无可选提案</option>';
-  } else if (phase.status === 'execution') {
-    els.phaseActions.innerHTML = '<span class="admin-empty">本轮已进入执行阶段。完成后可以归档并开启下一轮。</span><button class="phase-action secondary" type="button" data-phase-status="archived">归档本轮</button>';
-  } else {
-    els.phaseActions.innerHTML = '<span class="admin-empty">本轮已归档。可以在下方创建新的阶段。</span>';
+  const sum = state.admin.summary || {};
+  if (els.adminSummary) {
+    els.adminSummary.innerHTML = `
+      <div class="admin-summary-item"><strong>${sum.pending || 0}</strong><span>待审核</span></div>
+      <div class="admin-summary-item"><strong>${sum.approved || 0}</strong><span>已公开</span></div>
+      <div class="admin-summary-item"><strong>${sum.rejected || 0}</strong><span>未采用</span></div>
+      <div class="admin-summary-item"><strong>${sum.votes || 0}</strong><span>总投票</span></div>
+    `;
   }
+
+  renderReviewList('pending', state.admin.pending_proposals || []);
+  renderReviewList('approved', state.admin.approved_proposals || []);
+  renderReviewList('rejected', state.admin.rejected_proposals || []);
+
+  if (els.pendingTabCount) els.pendingTabCount.textContent = (state.admin.pending_proposals || []).length;
+  if (els.approvedTabCount) els.approvedTabCount.textContent = (state.admin.approved_proposals || []).length;
+  if (els.rejectedTabCount) els.rejectedTabCount.textContent = (state.admin.rejected_proposals || []).length;
 }
 
-function setMessage(element, message, isError = false) {
-  element.textContent = message || '';
-  element.classList.toggle('error', isError);
+function renderReviewList(tab, list) {
+  const container = tab === 'pending' ? els.adminProposals : (tab === 'approved' ? els.approvedProposals : els.rejectedProposals);
+  if (!container) return;
+
+  if (list.length === 0) {
+    container.innerHTML = '<p class="admin-empty">这里没有提案。</p>';
+    return;
+  }
+
+  container.innerHTML = list.map(p => `
+    <div class="admin-proposal-row review-proposal-row" data-row-id="${escapeHtml(p.id)}">
+      <input type="checkbox" class="proposal-checkbox" data-tab="${tab}" data-id="${escapeHtml(p.id)}">
+      <div>
+        <div class="review-proposal-topline">
+          <span class="review-status ${p.status}">${statusText[p.status] || p.status}</span>
+          <strong>${escapeHtml(p.title)}</strong>
+        </div>
+        <p class="proposal-desc">${escapeHtml(p.description)}</p>
+      </div>
+      <div class="admin-row-actions">
+        ${tab === 'pending' ? `
+          <button class="small-button approve" type="button" data-action="approve" data-id="${escapeHtml(p.id)}">通过</button>
+          <button class="small-button reject" type="button" data-action="reject" data-id="${escapeHtml(p.id)}">不采用</button>
+        ` : (tab === 'rejected' ? `
+          <button class="small-button approve" type="button" data-action="approve" data-id="${escapeHtml(p.id)}">重新通过</button>
+        ` : `
+          <button class="small-button reject" type="button" data-action="reject" data-id="${escapeHtml(p.id)}">下架</button>
+        `)}
+        <button class="small-button danger" type="button" data-action="delete" data-id="${escapeHtml(p.id)}">删除</button>
+      </div>
+    </div>
+  `).join('');
 }
 
-function showToast(message, isError = false) {
-  const toast = document.createElement('div');
-  toast.className = `toast${isError ? ' error' : ''}`;
-  toast.textContent = message;
-  els.toastStack.appendChild(toast);
-  window.setTimeout(() => toast.remove(), 4200);
-}
+// 审查单项操作
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.admin-row-actions button');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const id = btn.dataset.id;
+  if (!action || !id) return;
+
+  let res;
+  if (action === 'approve') {
+    res = await api('/api/admin/proposals/moderate', { method: 'POST', body: JSON.stringify({ ids: [id], action: 'approve' }) });
+  } else if (action === 'reject') {
+    res = await api('/api/admin/proposals/moderate', { method: 'POST', body: JSON.stringify({ ids: [id], action: 'reject' }) });
+  } else if (action === 'delete') {
+    if (!confirm('确定永久删除这条提案吗？')) return;
+    res = await api('/api/admin/proposals/moderate', { method: 'POST', body: JSON.stringify({ ids: [id], action: 'delete' }) });
+  }
+
+  if (res?.ok) {
+    showToast('操作已完成。');
+    await loadAdmin(false);
+    await loadPublic(false);
+  } else {
+    showToast(res?.error || '操作失败', 'error');
+  }
+});
 
 function openAdmin() {
-  els.adminModal.hidden = false;
-  document.body.style.overflow = 'hidden';
-  if (state.adminKey) {
-    loadAdmin(false).then((ok) => {
-      if (!ok) {
-        els.adminLoginView.hidden = false;
-        els.adminDashboard.hidden = true;
-        els.adminKey.focus();
-      }
-    });
-  } else {
-    els.adminLoginView.hidden = false;
-    els.adminDashboard.hidden = true;
-    window.setTimeout(() => els.adminKey.focus(), 50);
-  }
+  if (els.adminModal) els.adminModal.hidden = false;
+  if (state.adminKey) loadAdmin(false);
 }
-
 function closeAdmin() {
-  els.adminModal.hidden = true;
-  document.body.style.overflow = '';
+  if (els.adminModal) els.adminModal.hidden = true;
 }
 
-async function handleProposalSubmit(event) {
-  event.preventDefault();
-  if (!state.public?.currentPhase || state.public.currentPhase.status !== 'submitting') {
-    return showToast('当前阶段已经关闭提案提交。', true);
-  }
-  const formData = new FormData(els.proposalForm);
-  const payload = Object.fromEntries(formData.entries());
-  
-  setMessage(els.proposalMessage, '正在提交...');
-  els.proposalSubmit.disabled = true;
-  els.proposalSubmit.innerHTML = '提交中... <span aria-hidden="true">⏳</span>';
-  
-  try {
-    state.public = await api('/api/proposals', { method: 'POST', body: JSON.stringify(payload) });
-    els.proposalForm.reset();
-    clearDraft();
-    updateCharCounters();
-    setMessage(els.proposalMessage, '✓ 已收到你的提案！审核通过后会出现在公开列表中。');
-    showToast('提案已提交，感谢参与。');
-    renderPublic();
-    if (state.adminKey) await loadAdmin(false);
-    window.setTimeout(() => {
-      els.proposalMessage.textContent = '';
-    }, 8000);
-  } catch (error) {
-    setMessage(els.proposalMessage, error.message, true);
-  } finally {
-    updateSubmissionAvailability(currentPhase());
-  }
-}
+els.adminOpen?.addEventListener('click', openAdmin);
+els.adminClose?.addEventListener('click', closeAdmin);
+els.adminModal?.addEventListener('click', (e) => { if (e.target === els.adminModal) closeAdmin(); });
 
-async function handleVote(proposalId) {
-  const phase = currentPhase();
-  if (!phase) return;
-  try {
-    state.public = await api('/api/votes', { method: 'POST', body: JSON.stringify({ proposalId, visitorId: state.visitorId }) });
-    showToast('投票已记录。');
-    renderPublic();
-    if (state.adminKey) await loadAdmin(false);
-  } catch (error) {
-    showToast(error.message, true);
-    await loadPublic(false);
-  }
-}
-
-async function refreshAdmin() {
-  if (!state.adminKey || !els.adminRefresh) return;
-  els.adminRefresh.disabled = true;
-  try {
-    if (await loadAdmin(true)) {
-      await loadPublic(false);
-      showToast('工作台已刷新。');
-    }
-  } finally {
-    els.adminRefresh.disabled = false;
-  }
-}
-
-async function reviewProposal(proposalId, status) {
-  try {
-    state.admin = await api('/api/admin/proposals/review', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': state.adminKey },
-      body: JSON.stringify({ proposalId, status })
-    });
-    state.public = await api('/api/state');
-    renderPublic();
-    renderAdmin();
-    showToast(status === 'approved' ? '提案已通过并公开。' : '提案已标记为不采用。');
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function changePhaseStatus(status) {
-  try {
-    state.admin = await api('/api/admin/phase/status', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': state.adminKey },
-      body: JSON.stringify({ status })
-    });
-    state.public = await api('/api/state');
-    renderPublic();
-    renderAdmin();
-    showToast(`阶段状态已更新为：${statusText[status]}`);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function withdrawVoting() {
-  if (!window.confirm('确定撤回本轮投票吗？当前候选提案会回到待审核，已经产生的票数会清零。')) return;
-  try {
-    state.admin = await api('/api/admin/phase/withdraw-voting', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': state.adminKey },
-      body: JSON.stringify({})
-    });
-    state.public = await api('/api/state');
-    renderPublic();
-    renderAdmin();
-    showToast('投票已撤回，候选提案回到待审核。');
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function publishDecision() {
-  const proposalId = els.decisionProposal.value;
-  if (!proposalId) return showToast('请先选择一个提案。', true);
-  els.decisionSubmit.disabled = true;
-  try {
-    state.admin = await api('/api/admin/decision', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': state.adminKey },
-      body: JSON.stringify({ proposalId, note: els.decisionNote.value })
-    });
-    state.public = await api('/api/state');
-    els.decisionNote.value = '';
-    renderPublic();
-    renderAdmin();
-    showToast('本轮决定已公布。');
-  } catch (error) {
-    showToast(error.message, true);
-  } finally {
-    els.decisionSubmit.disabled = false;
-  }
-}
-
-async function publishUpdate(event) {
-  event.preventDefault();
-  try {
-    state.admin = await api('/api/admin/updates', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': state.adminKey },
-      body: JSON.stringify({ title: els.updateTitle.value, body: els.updateBody.value })
-    });
-    state.public = await api('/api/state');
-    els.updateForm.reset();
-    setMessage(els.updateMessage, '进展已发布。');
-    renderPublic();
-    renderAdmin();
-  } catch (error) {
-    setMessage(els.updateMessage, error.message, true);
-  }
-}
-
-async function createPhase(event) {
-  event.preventDefault();
-  try {
-    state.admin = await api('/api/admin/phases', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': state.adminKey },
-      body: JSON.stringify({
-        title: els.phaseTitle.value,
-        question: els.phaseQuestion.value,
-        deadline: els.phaseDeadlineInput.value
-      })
-    });
-    state.public = await api('/api/state');
-    els.phaseForm.reset();
-    setMessage(els.phaseMessage, '新阶段已经开启。');
-    renderPublic();
-    renderAdmin();
-  } catch (error) {
-    setMessage(els.phaseMessage, error.message, true);
-  }
-}
-
-function exportProjectData() {
-  api('/api/admin/backup', { headers: { 'X-Admin-Key': state.adminKey } }).then((backup) => {
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `flycode-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('项目数据已导出。');
-  }).catch((error) => showToast(error.message, true));
-}
-
-els.proposalForm.addEventListener('submit', handleProposalSubmit);
-els.proposalTitle.addEventListener('input', () => {
-  updateCharCounters();
-  saveDraft();
-});
-els.proposalDescription.addEventListener('input', () => {
-  updateCharCounters();
-  saveDraft();
-});
-document.querySelector('#proposal-author').addEventListener('input', saveDraft);
-document.querySelector('#proposal-link').addEventListener('input', saveDraft);
-els.proposalList.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-vote-id]');
-  if (button) handleVote(button.dataset.voteId);
-});
-els.adminProposals.addEventListener('click', (event) => {
-  const checkbox = event.target.closest('.proposal-checkbox');
-  if (checkbox) {
-    const type = checkbox.dataset.type;
-    const id = checkbox.dataset.id;
-    if (checkbox.checked) selectedProposals[type].add(id);
-    else selectedProposals[type].delete(id);
-    updateBatchActionsState();
-    return;
-  }
-  const button = event.target.closest('[data-review-id]');
-  if (button) reviewProposal(button.dataset.reviewId, button.dataset.reviewStatus);
-});
-els.rejectedProposals.addEventListener('click', (event) => {
-  const checkbox = event.target.closest('.proposal-checkbox');
-  if (!checkbox) return;
-  const id = checkbox.dataset.id;
-  if (checkbox.checked) selectedProposals.rejected.add(id);
-  else selectedProposals.rejected.delete(id);
-  updateBatchActionsState();
-});
-
-els.phaseActions.addEventListener('click', (event) => {
-  const withdrawButton = event.target.closest('[data-withdraw-voting]');
-  if (withdrawButton) {
-    withdrawVoting();
-    return;
-  }
-  const button = event.target.closest('[data-phase-status]');
-  if (button) changePhaseStatus(button.dataset.phaseStatus);
-});
-
-function selectAllIn(type, checkbox) {
-  const container = type === 'pending' ? els.adminProposals : els.rejectedProposals;
-  const inputs = container.querySelectorAll('.proposal-checkbox');
-  inputs.forEach((input) => {
-    input.checked = checkbox.checked;
-    if (checkbox.checked) selectedProposals[type].add(input.dataset.id);
-    else selectedProposals[type].delete(input.dataset.id);
-  });
-  updateBatchActionsState();
-}
-els.selectAllPending?.addEventListener('change', () => selectAllIn('pending', els.selectAllPending));
-els.selectAllRejected?.addEventListener('change', () => selectAllIn('rejected', els.selectAllRejected));
-els.batchApprove?.addEventListener('click', () => batchReviewAction('approve', Array.from(selectedProposals.pending), '通过'));
-els.batchReject?.addEventListener('click', () => batchReviewAction('reject', Array.from(selectedProposals.pending), '不采用'));
-els.batchDeletePending?.addEventListener('click', () => batchReviewAction('delete', Array.from(selectedProposals.pending), '永久删除'));
-els.batchRereview?.addEventListener('click', () => batchReviewAction('rereview', Array.from(selectedProposals.rejected), '重新审查'));
-els.batchDeleteRejected?.addEventListener('click', () => batchReviewAction('delete', Array.from(selectedProposals.rejected), '永久删除'));
-document.querySelectorAll('[data-review-tab]').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    const target = tab.dataset.reviewTab;
-    document.querySelectorAll('[data-review-tab]').forEach((item) => item.classList.toggle('active', item === tab));
-    document.querySelectorAll('[data-review-pane]').forEach((pane) => {
-      const active = pane.dataset.reviewPane === target;
-      pane.classList.toggle('active', active);
-      pane.hidden = !active;
-    });
-  });
-});
-els.decisionSubmit.addEventListener('click', publishDecision);
-els.updateForm.addEventListener('submit', publishUpdate);
-els.phaseForm.addEventListener('submit', createPhase);
-els.adminOpen.addEventListener('click', openAdmin);
-els.adminClose.addEventListener('click', closeAdmin);
-els.adminModal.addEventListener('click', (event) => {
-  if (event.target === els.adminModal) closeAdmin();
-});
-els.adminLoginForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
+els.adminLoginForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
   const key = els.adminKey.value.trim();
   if (!key) return setMessage(els.adminLoginMessage, '请输入管理密钥。', true);
   state.adminKey = key;
@@ -758,34 +531,90 @@ els.adminLoginForm.addEventListener('submit', async (event) => {
     setMessage(els.adminLoginMessage, '管理密钥不正确。', true);
   }
 });
-els.adminLogout.addEventListener('click', () => {
+
+els.adminLogout?.addEventListener('click', () => {
   state.adminKey = '';
   state.admin = null;
   sessionStorage.removeItem('flycode-admin-key');
   els.adminLoginView.hidden = false;
   els.adminDashboard.hidden = true;
   els.adminKey.value = '';
-  els.adminKey.focus();
-});
-els.exportData.addEventListener('click', exportProjectData);
-els.adminRefresh?.addEventListener('click', refreshAdmin);
-document.addEventListener('click', (event) => {
-  const target = event.target.closest('[data-scroll-to]');
-  if (!target) return;
-  const targetId = target.dataset.scrollTo;
-  const element = document.getElementById(targetId);
-  if (element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 });
 
-document.querySelector('#join-button')?.addEventListener('click', () => {
-  document.getElementById('submit-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+// 管理端 Tab 切换
+document.querySelectorAll('.review-tab').forEach(tabBtn => {
+  tabBtn.addEventListener('click', () => {
+    document.querySelectorAll('.review-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.review-pane').forEach(p => { p.hidden = true; p.classList.remove('active'); });
+    tabBtn.classList.add('active');
+    const pane = document.querySelector(`.review-pane[data-review-pane="${tabBtn.dataset.reviewTab}"]`);
+    if (pane) { pane.hidden = false; pane.classList.add('active'); }
+  });
 });
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !els.adminModal.hidden) closeAdmin();
+
+/* ==========================================================================
+   双主题切换引擎 (Stripe 晨光流色 / Linear 极光深空)
+   ========================================================================== */
+const themeToggleBtn = document.querySelector('#theme-toggle');
+const themeIconSun = document.querySelector('#theme-icon-sun');
+const themeIconMoon = document.querySelector('#theme-icon-moon');
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('flycode-theme', theme);
+  if (theme === 'dark') {
+    if (themeIconSun) themeIconSun.style.display = 'block';
+    if (themeIconMoon) themeIconMoon.style.display = 'none';
+  } else {
+    if (themeIconSun) themeIconSun.style.display = 'none';
+    if (themeIconMoon) themeIconMoon.style.display = 'block';
+  }
+}
+
+const savedTheme = localStorage.getItem('flycode-theme') || 
+  (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+applyTheme(savedTheme);
+
+themeToggleBtn?.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
 });
+
+/* ==========================================================================
+   3D 视差倾斜交互 (Tilt Parallax)
+   ========================================================================== */
+function init3DTilt(element, maxTilt = 8) {
+  if (!element) return;
+  element.addEventListener('mousemove', (e) => {
+    const rect = element.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const rotateX = ((y - centerY) / centerY) * -maxTilt;
+    const rotateY = ((x - centerX) / centerX) * maxTilt;
+    element.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateZ(6px)`;
+  });
+  element.addEventListener('mouseleave', () => {
+    element.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)';
+  });
+}
+const mainBoard = document.querySelector('#main-question-board');
+if (mainBoard) init3DTilt(mainBoard, 6);
 
 loadDraft();
 loadPublic();
 window.setInterval(() => loadPublic(false), 15000);
+
+// 平滑滚动到指定区域 (data-scroll-to)
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('[data-scroll-to]');
+  if (!trigger) return;
+  e.preventDefault();
+  const targetId = trigger.dataset.scrollTo;
+  const targetEl = document.getElementById(targetId);
+  if (targetEl) {
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});

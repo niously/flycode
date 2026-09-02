@@ -1,19 +1,17 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Flycode：大家一起来讨论，参与网站的定制。">
   <title>Flycode · 一起定制一个网站</title>
   
-  <!-- Open Graph / 分享卡片 -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://flycode.online/">
   <meta property="og:title" content="Flycode · 一起定制一个网站">
   <meta property="og:description" content="功能、内容和方向，由我们一起决定。每一轮参与，都会让它更接近它真正要成为的样子。">
   <meta property="og:site_name" content="Flycode">
   
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Flycode · 一起定制一个网站">
   <meta name="twitter:description" content="功能、内容和方向，由我们一起决定。">
@@ -22,59 +20,109 @@
   <link rel="icon" type="image/png" href="/icons/flycode-icon-dark.png" media="(prefers-color-scheme: dark)">
   <link rel="apple-touch-icon" href="/icons/flycode-icon-dark.png">
 
+  <!-- Three.js CDN 用于纯原生 3D WebGL 实时渲染 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <!-- 动态流光背景与极光层 -->
+  <div class="mesh-gradient-bg">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+  </div>
+  <!-- 2D 流体光轨引力 Canvas -->
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- 鼠标交互引力全息光环 -->
+  <div class="cursor-glow" id="cursor-glow"></div>
+
   <div class="site-shell">
-    <header class="topbar">
-      <a class="brand" href="#top" aria-label="Flycode 首页">
-        <span class="brand-mark"><img src="/icons/flycode-icon-dark.png" alt=""></span>
-        <span>Flycode</span>
-        <span class="brand-state">IN PROGRESS</span>
-      </a>
-      <nav class="main-nav" aria-label="主导航">
-        <a class="nav-link active" href="#overview">项目</a>
-        <a class="nav-link" href="#participate">参与</a>
-        <a class="nav-link" href="#timeline">成长记录</a>
-      </nav>
-      <button class="text-button" id="admin-open" type="button">管理入口 <span aria-hidden="true">↗</span></button>
-    </header>
+    <div class="topbar-container">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="Flycode 首页">
+          <span class="brand-mark">
+            <img class="theme-icon-light" src="/icons/flycode-icon-dark.png" alt="Flycode">
+            <img class="theme-icon-dark" src="/icons/flycode-icon-light.png" alt="Flycode">
+          </span>
+          <span class="brand-name">Flycode</span>
+          <span class="brand-state">共创进行中</span>
+        </a>
+        <nav class="main-nav" aria-label="主导航">
+          <a class="nav-link active" href="#overview">项目</a>
+          <a class="nav-link" href="#participate">参与</a>
+          <a class="nav-link" href="#timeline">成长记录</a>
+        </nav>
+        <div class="topbar-actions">
+          <button class="theme-toggle-btn" id="theme-toggle" type="button" aria-label="切换浅色/深色主题" title="切换主题">
+            <svg id="theme-icon-sun" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0s-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+            <svg id="theme-icon-moon" viewBox="0 0 24 24" style="display:none;"><path d="M12.3 2a10 10 0 0 0-1.9 19.8 9.9 9.9 0 0 0 9.8-7.7 1 1 0 0 0-1.2-1.2 8 8 0 0 1-6.7-10.9A1 1 0 0 0 12.3 2z"/></svg>
+          </button>
+          <button class="text-button" id="admin-open" type="button">管理入口 <span aria-hidden="true">↗</span></button>
+        </div>
+      </header>
+    </div>
 
     <main id="top">
       <section class="round-bar" aria-label="当前阶段">
-        <div class="round-label"><span class="pulse-dot"></span><span>公开共创项目</span></div>
+        <div class="round-label"><span class="pulse-dot"></span><span>公开共创阶段</span></div>
         <div class="round-track" aria-hidden="true"><span id="round-track-fill"></span></div>
-        <div class="round-meta"><span id="round-number">ROUND 01</span><span id="round-status">提案收集中</span></div>
+        <div class="round-meta"><span id="round-number">第 01 轮</span> · <span id="round-status">提案收集中</span></div>
       </section>
 
+      <!-- HERO 区域：集成全息 3D 实时交互 WebGL 视效 -->
       <section class="hero" id="overview">
         <div class="hero-copy">
-          <p class="eyebrow">一个还没有答案的网站</p>
-          <h1>功能、内容和方向，<br><em>由我们一起决定。</em></h1>
+          <p class="eyebrow"><span class="sparkle-icon">✦</span> 全民共创平台</p>
+          <h1>功能、内容和方向，<br><em class="gradient-text">由我们一起决定。</em></h1>
           <p class="hero-description">Flycode 从一个想法开始。你可以提出想做的功能、想看的内容，或者完全不同的发展方向。每一轮参与，都会让它更接近它真正要成为的样子。</p>
           <div class="hero-actions">
-            <a class="primary-button" id="join-button" href="#submit-panel">提出你的想法 <span aria-hidden="true">↗</span></a>
-            <a class="quiet-link" href="#timeline">看看它怎样长出来 <span aria-hidden="true">↓</span></a>
+            <a class="primary-button" id="join-button" href="#submit-panel">
+              <span class="btn-sparkle">✦</span> 提出你的想法 <span class="arrow-icon" aria-hidden="true">↗</span>
+            </a>
+            <a class="secondary-button" href="#timeline">看看它怎样长出来 <span aria-hidden="true">↓</span></a>
           </div>
-          <div class="hero-footnote"><span class="footnote-line"></span><span>你不需要懂代码，也可以参与第一轮。</span></div>
+          <div class="hero-footnote"><span class="footnote-line"></span><span>你不需要懂代码，也可以参与第一轮共创。</span></div>
         </div>
-        <div class="question-board">
-          <div class="board-topline"><span>NOW DISCUSSING</span><span id="board-phase-id">01 / 01</span></div>
-          <div class="board-rule"></div>
-          <p class="board-label">这一轮的问题</p>
-          <h2 id="current-question">你希望它先做什么？</h2>
-          <p id="current-phase-description">提出一个具体的功能、内容或发展方向，告诉我们为什么它值得优先考虑。</p>
-          <div class="board-footer">
-            <div><span class="mini-label">截止时间</span><strong id="phase-deadline">开放中</strong></div>
-            <div><span class="mini-label">当前状态</span><strong id="phase-state">提案收集中</strong></div>
+
+        <div class="hero-3d-stage">
+          <!-- 原生 WebGL 3D 晶体交互视口 (纯实时渲染，透明无黑边) -->
+          <div class="crystal-canvas-container" id="crystal-3d-wrapper">
+            <canvas id="crystal-canvas"></canvas>
+            <div class="crystal-glow-backdrop"></div>
+            <div class="crystal-interactive-hint"><span>划过/拖动倾斜 ✦ 点击共振</span></div>
+          </div>
+
+          <!-- 3D 悬浮透视看板 -->
+          <div class="question-board" id="main-question-board">
+            <div class="board-topline">
+              <span class="board-tag">当前共创议题</span>
+              <span id="board-phase-id" class="board-phase-code">01 / 01</span>
+            </div>
+            <p class="board-label">这一轮的问题</p>
+            <h2 id="current-question">你希望它先做什么？</h2>
+            <p id="current-phase-description">提出一个具体的功能、内容或发展方向，告诉我们为什么它值得优先考虑。</p>
+            <div class="board-footer">
+              <div class="board-stat-item"><span class="mini-label">截止时间</span><strong id="phase-deadline">开放中</strong></div>
+              <div class="board-stat-item"><span class="mini-label">当前状态</span><strong id="phase-state">提案收集中</strong></div>
+            </div>
           </div>
         </div>
       </section>
 
       <section class="signal-row" aria-label="项目概览">
-        <div class="signal-item"><strong id="stat-proposals">0</strong><span>收到的提案</span></div>
-        <div class="signal-item"><strong id="stat-participants">0</strong><span>参与者</span></div>
-        <div class="signal-item"><strong id="stat-rounds">1</strong><span>正在进行的轮次</span></div>
+        <div class="signal-item">
+          <div class="signal-number"><strong id="stat-proposals">0</strong><span class="signal-unit">+</span></div>
+          <span class="signal-title">收到的提案</span>
+        </div>
+        <div class="signal-item">
+          <div class="signal-number"><strong id="stat-participants">0</strong><span class="signal-unit">人</span></div>
+          <span class="signal-title">社区共创者</span>
+        </div>
+        <div class="signal-item">
+          <div class="signal-number"><strong id="stat-rounds">1</strong><span class="signal-unit">轮</span></div>
+          <span class="signal-title">进行中的轮次</span>
+        </div>
         <p class="signal-note">这是一个会随着参与不断变化的项目。<br>现在的空白，正等着你的第一笔。</p>
       </section>
 
@@ -82,7 +130,7 @@
         <div class="proposals-column">
           <div class="section-intro">
             <div>
-              <p class="section-index">01 / COMMUNITY INPUT</p>
+              <p class="section-index">01 / 社区提案库</p>
               <h2>大家正在提出什么</h2>
             </div>
             <p class="section-explanation">通过审核的想法会出现在这里。投票阶段开启后，你可以选出最值得先做的一个。</p>
@@ -104,7 +152,7 @@
         <aside class="submit-panel" id="submit-panel">
           <div class="panel-heading">
             <div>
-              <p class="section-index">02 / MAKE A MARK</p>
+              <p class="section-index">02 / 参与定制</p>
               <h2>定制这一轮</h2>
             </div>
             <span class="panel-symbol" aria-hidden="true">+</span>
@@ -120,7 +168,9 @@
             <label class="field-label" for="proposal-link">参考链接 <span>可不填</span></label>
             <input class="field-input" id="proposal-link" name="link" type="url" maxlength="500" placeholder="https://...">
             <input class="honeypot" id="proposal-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-            <button class="primary-button full-width" id="proposal-submit" type="submit">提交提案 <span aria-hidden="true">↗</span></button>
+            <button class="primary-button full-width" id="proposal-submit" type="submit">
+              <span class="btn-sparkle">✦</span> 提交提案 <span aria-hidden="true">↗</span>
+            </button>
             <p class="form-note">提交后会先进入审核。我们只公开通过审核的内容，不要求注册账号。</p>
             <div class="submission-guidance">
               <details>
@@ -140,7 +190,7 @@
       <section class="decision-section" id="decision-section" hidden>
         <div class="section-intro compact-intro">
           <div>
-            <p class="section-index">03 / COMMUNITY DECISION</p>
+            <p class="section-index">03 / 社区共创决议</p>
             <h2>这一轮，大家选出了什么</h2>
           </div>
           <p class="section-explanation">投票结果是社区意见的一部分，最终会结合目标、成本和实际开发能力推进。</p>
@@ -151,7 +201,7 @@
       <section class="timeline-section" id="timeline">
         <div class="timeline-header">
           <div>
-            <p class="section-index">04 / WHAT HAS CHANGED</p>
+            <p class="section-index">04 / 历史演进</p>
             <h2>成长记录</h2>
           </div>
           <span class="timeline-mark" aria-hidden="true">↘</span>
@@ -160,18 +210,22 @@
       </section>
 
       <section class="closing-section">
-        <div class="closing-number">F/01</div>
+        <div class="closing-number">01</div>
         <div class="closing-copy">
-          <p class="eyebrow">Flycode is still becoming</p>
+          <p class="eyebrow">共创仍在持续生长</p>
           <h2>下一步，<br><em>由你来写。</em></h2>
         </div>
-        <div class="closing-action"><button class="primary-button" type="button" data-scroll-to="submit-panel">参与第一轮 <span aria-hidden="true">↗</span></button></div>
+        <div class="closing-action">
+          <button class="primary-button" type="button" data-scroll-to="submit-panel">
+            <span class="btn-sparkle">✦</span> 参与第一轮 <span aria-hidden="true">↗</span>
+          </button>
+        </div>
       </section>
     </main>
 
     <footer class="footer">
       <span>FLYCODE / 0.1</span>
-      <span>一个持续生长的共创项目</span>
+      <span>一个持续生长的共创平台</span>
       <span id="last-sync">正在连接...</span>
     </footer>
   </div>
@@ -183,7 +237,7 @@
         <button class="icon-button" id="admin-close" type="button" aria-label="关闭管理窗口" title="关闭">×</button>
       </div>
       <div id="admin-login-view">
-        <p class="modal-intro">这里是发起人的工作台。第一版使用本地管理密钥，先用于本机体验；正式上线前需要换成安全的账号登录。</p>
+        <p class="modal-intro">这里是发起人的工作台。第一版使用本地管理密钥，先用于体验；正式上线前需要换成安全的账号登录。</p>
         <form id="admin-login-form">
           <label class="field-label" for="admin-key">管理密钥</label>
           <input class="field-input" id="admin-key" type="password" autocomplete="current-password" placeholder="输入管理密钥">
@@ -267,6 +321,8 @@
   </div>
 
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
+  <script src="/scripts/fluid-bg.js" defer></script>
+  <script src="/scripts/crystal.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>
