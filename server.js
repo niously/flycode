@@ -753,6 +753,7 @@ function serveStatic(request, response, url) {
       const extension = path.extname(resolved).toLowerCase();
       response.writeHead(200, {
         'Content-Type': MIME_TYPES[extension] || 'application/octet-stream',
+        'Content-Disposition': 'inline',
         'Cache-Control': ['.html', '.js', '.css'].includes(extension) ? 'no-cache, no-store, must-revalidate' : 'public, max-age=3600',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
@@ -763,6 +764,7 @@ function serveStatic(request, response, url) {
     const indexFile = path.join(PUBLIC_DIR, 'index.html');
     response.writeHead(200, {
       'Content-Type': MIME_TYPES['.html'],
+      'Content-Disposition': 'inline',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
