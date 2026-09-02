@@ -8,6 +8,34 @@
   --radius-pill: 9999px;
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  
+  /* 默认浅色主题变量（后备值） */
+  --bg-base: #f8fafc;
+  --ink-900: #090d16;
+  --ink-700: #1e293b;
+  --ink-500: #475569;
+  --ink-muted: #94a3b8;
+  --border-subtle: rgba(148, 163, 184, 0.18);
+  --border-medium: rgba(99, 102, 241, 0.25);
+  
+  --glass-surface: rgba(255, 255, 255, 0.75);
+  --glass-surface-hover: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.85);
+  
+  --brand-primary: #4f46e5;
+  --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
+  --brand-gradient-glow: linear-gradient(135deg, rgba(79, 70, 229, 0.6) 0%, rgba(124, 58, 237, 0.6) 50%, rgba(219, 39, 119, 0.6) 100%);
+  
+  --badge-bg: rgba(99, 102, 241, 0.08);
+  --badge-text: #4f46e5;
+  --badge-border: rgba(99, 102, 241, 0.2);
+
+  --card-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.1), 0 20px 40px -15px rgba(15, 23, 42, 0.05);
+  --card-shadow-hover: 0 25px 50px -12px rgba(99, 102, 241, 0.22), 0 0 0 1px rgba(99, 102, 241, 0.3);
+  
+  --input-bg: rgba(255, 255, 255, 0.85);
+  --input-border: rgba(203, 213, 225, 0.7);
+  --glow-accent: rgba(99, 102, 241, 0.4);
 }
 
 /* ==========================================================================
