@@ -252,9 +252,6 @@ html[data-theme="light"] .cursor-glow {
 }
 .topbar {
   pointer-events: auto; /* 恢复导航栏本身的交互 */
-}
-
-.topbar {
   width: 100%;
   max-width: 1200px;
   min-height: 64px;
