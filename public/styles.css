@@ -82,9 +82,9 @@ html[data-theme="dark"] {
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-medium: rgba(168, 85, 247, 0.35);
   
-  --glass-surface: rgba(13, 16, 28, 0.65);
-  --glass-surface-hover: rgba(20, 24, 42, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-surface: rgba(30, 35, 55, 0.85);
+  --glass-surface-hover: rgba(40, 45, 70, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.15);
   
   --brand-primary: #818cf8;
   --brand-gradient: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 50%, #f43f5e 100%);
