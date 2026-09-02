@@ -546,6 +546,9 @@ document.querySelectorAll('.review-tab').forEach(tabBtn => {
 
 function init3DTilt(element, maxTilt = 8) {
   if (!element) return;
+  // 手机触控屏幕禁用鼠标倾斜，避免手滑滚动时看板歪斜变形
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
+
   element.addEventListener('mousemove', (e) => {
     const rect = element.getBoundingClientRect();
     const x = e.clientX - rect.left;

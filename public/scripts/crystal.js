@@ -1,5 +1,5 @@
 /* ==========================================================================
-   纯原生 WebGL 3D 交互全息水晶 (保持多面体钻石切面高反光原版设定)
+   纯原生 WebGL 3D 交互全息水晶（保留原版建模结构，极致强化切面高反光与流光闪烁）
    ========================================================================== */
 (function init3DWebGLCrystal() {
   const canvas = document.querySelector('#crystal-canvas');
@@ -17,74 +17,81 @@
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;
+  renderer.toneMappingExposure = 1.6;
 
-  // 1. 动态生成反射环境贴图 (呈现真实钻石高光倒影)
+  // 1. 生成极具反射质感的 360° 环境反射贴图（模拟真实摄影棚多重高光棚灯）
   const pmremGenerator = new THREE.PMREMGenerator(renderer);
   pmremGenerator.compileEquirectangularShader();
 
   const envScene = new THREE.Scene();
-  const envLight1 = new THREE.DirectionalLight(0x06b6d4, 4);
-  envLight1.position.set(1, 1, 1);
-  envScene.add(envLight1);
-  const envLight2 = new THREE.DirectionalLight(0xf43f5e, 4);
-  envLight2.position.set(-1, -1, -1);
-  envScene.add(envLight2);
-  const envLight3 = new THREE.DirectionalLight(0x8b5cf6, 5);
-  envLight3.position.set(0, 2, -1);
-  envScene.add(envLight3);
+  // 顶部主白光棚灯
+  const envLightTop = new THREE.DirectionalLight(0xffffff, 8);
+  envLightTop.position.set(0, 5, 2);
+  envScene.add(envLightTop);
+  // 左侧冷青霓虹灯
+  const envLightCyan = new THREE.DirectionalLight(0x00f0ff, 6);
+  envLightCyan.position.set(-4, 2, 2);
+  envScene.add(envLightCyan);
+  // 右侧紫红高光灯
+  const envLightPink = new THREE.DirectionalLight(0xff00aa, 6);
+  envLightPink.position.set(4, -2, 2);
+  envScene.add(envLightPink);
+  // 背面轮廓反光灯
+  const envLightBack = new THREE.DirectionalLight(0x818cf8, 6);
+  envLightBack.position.set(0, -3, -4);
+  envScene.add(envLightBack);
 
   const envRt = pmremGenerator.fromScene(envScene);
   scene.environment = envRt.texture;
 
-  // 2. 完美钻石切角多面体 (Octahedron 强化锐利反光切面)
+  // 2. 保持原版八面体钻石切角几何建模
   const geometry = new THREE.OctahedronGeometry(1.2, 0);
 
-  // 3. 顶级物理玻璃+钻石切面折射材质 (开启 flatShading 与超强高光)
+  // 3. 极致钻石反光材质：超低粗糙度 + 强折射率 + 超高清漆高光
   const material = new THREE.MeshPhysicalMaterial({
-    roughness: 0.0,
-    metalness: 0.1,
-    transmission: 0.95,
-    thickness: 1.8,
-    ior: 2.4, // 钻石折射率，极强锐利反光
-    reflectivity: 1.0,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.0,
+    roughness: 0.0,           // 绝对光滑镜面
+    metalness: 0.25,          // 适度金属反光感
+    transmission: 0.92,       // 透光折射
+    thickness: 1.6,
+    ior: 2.42,                // 真实钻石折射率，产生极强光线折射与切面反射
+    reflectivity: 1.0,        // 100% 表面反射率
+    clearcoat: 1.0,           // 表面覆盖一层极清亮的高光清漆层
+    clearcoatRoughness: 0.0,  // 清漆层零粗糙度
     color: 0xffffff,
-    emissive: 0x6366f1,
+    emissive: 0x4f46e5,
     emissiveIntensity: 0.35,
     transparent: true,
     opacity: 0.95,
-    flatShading: true // 开启切面锐利折射反光
+    flatShading: true         // 关键：保留锋利的钻石切面明暗反光
   });
 
   const crystal = new THREE.Mesh(geometry, material);
   scene.add(crystal);
 
-  // 4. 内层全息能量棱镜 (反向自转，增强内部多层深邃折射)
+  // 4. 原版内层能量棱镜
   const innerGeo = new THREE.OctahedronGeometry(0.6, 0);
   const innerMat = new THREE.MeshPhysicalMaterial({
     roughness: 0.1,
-    metalness: 0.2,
+    metalness: 0.3,
     color: 0xec4899,
     emissive: 0xf43f5e,
-    emissiveIntensity: 0.8,
+    emissiveIntensity: 0.85,
     flatShading: true
   });
   const innerCore = new THREE.Mesh(innerGeo, innerMat);
   crystal.add(innerCore);
 
-  // 5. 动态高光点光源 (围绕水晶公转，产生极度璀璨的高光切面闪烁)
-  const pointLight1 = new THREE.PointLight(0x00f0ff, 4.5, 20);
+  // 5. 动态高亮度公转点光源（产生旋转时棱面瞬间闪烁的钻石反光）
+  const pointLight1 = new THREE.PointLight(0x00ffff, 5, 25);
   scene.add(pointLight1);
 
-  const pointLight2 = new THREE.PointLight(0xff0077, 4.5, 20);
+  const pointLight2 = new THREE.PointLight(0xff0066, 5, 25);
   scene.add(pointLight2);
 
-  const pointLight3 = new THREE.PointLight(0xffffff, 5, 20);
+  const pointLight3 = new THREE.PointLight(0xffffff, 6, 25);
   scene.add(pointLight3);
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
   scene.add(ambientLight);
 
   // 交互控制：鼠标与手机触控
@@ -126,7 +133,7 @@
   }, { passive: true });
   window.addEventListener('touchend', onPointerUp);
 
-  // 点击共振特效 (绝不停止旋转)
+  // 点击共振特效 (脉冲增亮)
   container.addEventListener('click', () => {
     material.emissiveIntensity = 1.6;
     material.color.setHex(0xa5b4fc);
@@ -144,28 +151,28 @@
     time += 0.02;
 
     // 高光光源环绕公转 (制造极致的切面流光与反光闪烁)
-    pointLight1.position.x = Math.sin(time) * 3;
-    pointLight1.position.z = Math.cos(time) * 3;
+    pointLight1.position.x = Math.sin(time) * 3.2;
+    pointLight1.position.z = Math.cos(time) * 3.2;
     pointLight1.position.y = Math.cos(time * 0.7) * 2;
 
-    pointLight2.position.x = -Math.sin(time * 0.8) * 3;
-    pointLight2.position.z = -Math.cos(time * 0.8) * 3;
+    pointLight2.position.x = -Math.sin(time * 0.8) * 3.2;
+    pointLight2.position.z = -Math.cos(time * 0.8) * 3.2;
     pointLight2.position.y = Math.sin(time * 0.5) * 2;
 
-    pointLight3.position.x = Math.cos(time * 1.2) * 2.5;
-    pointLight3.position.y = Math.sin(time * 1.2) * 2.5;
-    pointLight3.position.z = 2.5;
+    pointLight3.position.x = Math.cos(time * 1.2) * 2.8;
+    pointLight3.position.y = Math.sin(time * 1.2) * 2.8;
+    pointLight3.position.z = 2.8;
 
-    // 永远自转并带有物理惯性（降低桌面自转速度，更加优雅舒缓）
+    // 优雅舒缓自转并带有物理惯性
     if (!isDragging) {
-      crystal.rotation.y += 0.0035 + vx;
-      crystal.rotation.x += 0.0018 + vy;
+      crystal.rotation.y += 0.004 + vx;
+      crystal.rotation.x += 0.002 + vy;
       vx *= 0.95;
       vy *= 0.95;
     }
 
-    innerCore.rotation.y -= 0.008;
-    innerCore.rotation.z += 0.005;
+    innerCore.rotation.y -= 0.012;
+    innerCore.rotation.z += 0.008;
 
     renderer.render(scene, camera);
   }

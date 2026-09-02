@@ -13,7 +13,9 @@
   }
 
   function updateDOM(actualTheme, choice) {
+    // 强制设置 HTML 的 data-theme 属性（优先级最高）
     document.documentElement.setAttribute('data-theme', actualTheme);
+    document.documentElement.className = `theme-${actualTheme}`;
 
     const sunIcon = document.querySelector('#theme-icon-sun');
     const moonIcon = document.querySelector('#theme-icon-moon');
@@ -43,7 +45,7 @@
     updateDOM(actual, newChoice);
   }
 
-  // 1. 初始化主题
+  // 1. 初始化主题（自执行立即可用）
   const initialChoice = getSavedChoice();
   const initialActual = initialChoice === 'auto' ? getSystemTheme() : initialChoice;
   updateDOM(initialActual, initialChoice);
@@ -58,16 +60,14 @@
     });
   }
 
-  // 3. 点击切换逻辑：根据当前屏幕显示的实际主题做精准翻转，绝不出现“点一次没反应/点两次才切换”
+  // 3. 点击切换逻辑：根据当前屏幕显示的实际主题做精准翻转
   function handleToggle(e) {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    // 获取当前屏幕上生效的主题
     const currentActiveTheme = document.documentElement.getAttribute('data-theme') || getSystemTheme();
-    // 直接翻转到对立主题
     const nextTheme = (currentActiveTheme === 'dark') ? 'light' : 'dark';
 
     setChoice(nextTheme);
@@ -77,12 +77,11 @@
     }
   }
 
-  // DOM 就绪后绑定事件
+  // 手机端支持 pointerdown / touchend / click 多事件捕获，确保按一下秒切
   function bindButton() {
     const btn = document.querySelector('#theme-toggle');
     if (btn) {
-      btn.removeEventListener('click', handleToggle);
-      btn.addEventListener('click', handleToggle);
+      btn.onclick = handleToggle;
       // 重新同步一次按钮状态
       const choice = getSavedChoice();
       const actual = choice === 'auto' ? getSystemTheme() : choice;
