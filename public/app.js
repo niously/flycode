@@ -157,6 +157,7 @@ async function api(path, options = {}) {
   const res = await fetch(path, { credentials: 'same-origin', ...options, headers });
   const data = await res.json().catch(() => ({ error: '网络返回异常' }));
   data.ok = res.ok;
+  data.status = res.status;
   if (!res.ok && !data.error) {
     data.error = `HTTP ${res.status}`;
   }
@@ -239,7 +240,7 @@ function renderPublic() {
 
   if (els.statProposals) els.statProposals.textContent = data.stats?.proposalCount ?? (data.proposals || []).length;
   if (els.statParticipants) els.statParticipants.textContent = data.stats?.participantCount ?? 0;
-  if (els.statRounds) els.statRounds.textContent = data.stats?.completedRounds ?? 1;
+  if (els.statRounds) els.statRounds.textContent = currentPhase.number || data.phases?.length || 1;
 
   renderProposals(data.proposals || [], currentPhase.status, currentPhase);
   renderDecision(currentPhase, data.proposals || []);
@@ -416,14 +417,31 @@ els.proposalForm?.addEventListener('submit', async (e) => {
 els.proposalTitle?.addEventListener('input', () => { updateCounters(); saveDraft(); });
 els.proposalDescription?.addEventListener('input', () => { updateCounters(); saveDraft(); });
 
+function reviewLocked() {
+  const status = state.admin?.currentPhase?.status;
+  return status === 'voting' || status === 'execution';
+}
+
+function resetAdminSession(message, showFeedback) {
+  state.admin = null;
+  state.adminKey = '';
+  sessionStorage.removeItem('flycode-admin-key');
+  selectedProposals.pending.clear();
+  selectedProposals.rejected.clear();
+  if (els.adminLoginView) els.adminLoginView.hidden = false;
+  if (els.adminDashboard) els.adminDashboard.hidden = true;
+  if (showFeedback) setMessage(els.adminLoginMessage, message, true);
+}
+
 async function loadAdmin(showFeedback = true) {
   if (!state.adminKey) return false;
   const res = await api('/api/admin/state', { headers: { 'X-Admin-Key': state.adminKey } });
   if (!res.ok) {
-    state.admin = null;
-    sessionStorage.removeItem('flycode-admin-key');
-    state.adminKey = '';
-    if (showFeedback) setMessage(els.adminLoginMessage, res.error || '管理密钥不正确。', true);
+    if (res.status === 401) {
+      resetAdminSession(res.error || '管理密钥不正确。', showFeedback);
+    } else if (showFeedback) {
+      showToast(res.error || '工作台暂时无法刷新。', 'error');
+    }
     return false;
   }
   state.admin = res;
@@ -446,7 +464,7 @@ function renderAdmin() {
     els.adminSummary.innerHTML = `
       <div class="admin-summary-item"><strong>${allProposals.length}</strong><span>全部提案</span></div>
       <div class="admin-summary-item"><strong>${pending.length}</strong><span>待审核</span></div>
-      <div class="admin-summary-item"><strong>${state.admin.stats?.participantCount || 0}</strong><span>投票参与者</span></div>
+      <div class="admin-summary-item"><strong>${approved.length}</strong><span>已公开</span></div>
     `;
   }
   if (els.adminCurrentStatus) els.adminCurrentStatus.textContent = statusText[phase?.status] || '';
@@ -463,14 +481,50 @@ function renderAdmin() {
 
 function renderReviewList(container, proposals, type) {
   if (!container) return;
+  const selectable = type === 'pending' || type === 'rejected';
+  const locked = reviewLocked();
+  if (selectable) {
+    const visibleIds = new Set(proposals.map((proposal) => proposal.id));
+    selectedProposals[type] = new Set([...selectedProposals[type]].filter((id) => visibleIds.has(id)));
+  }
   if (!proposals.length) {
     container.innerHTML = '<p class="admin-empty">这里暂时没有提案。</p>';
+    if (selectable) {
+      selectedProposals[type].clear();
+      updateBatchButtons();
+    }
     return;
   }
-  container.innerHTML = proposals.map((proposal, index) => `
+  container.innerHTML = proposals.map((proposal) => {
+    const metaBits = [
+      escapeHtml(proposal.author || '匿名共创者'),
+      formatRelative(proposal.createdAt)
+    ];
+    if (proposal.voteCount) metaBits.push(`${proposal.voteCount} 票`);
+    const linkHtml = proposal.link
+      ? `<a class="proposal-link-pill" href="${escapeHtml(proposal.link)}" target="_blank" rel="noopener noreferrer">参考链接 ↗</a>`
+      : '';
+    let actions = '';
+    if (!locked) {
+      if (type === 'pending') {
+        actions = `
+          <button class="small-button approve" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="approved">通过</button>
+          <button class="small-button reject" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="rejected">不采用</button>
+          <button class="small-button danger" type="button" data-delete-id="${escapeHtml(proposal.id)}" data-delete-type="pending">删除</button>`;
+      } else if (type === 'rejected') {
+        actions = `
+          <button class="small-button approve" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="pending">重新审查</button>
+          <button class="small-button danger" type="button" data-delete-id="${escapeHtml(proposal.id)}" data-delete-type="rejected">删除</button>`;
+      } else if (type === 'approved') {
+        actions = `
+          <button class="small-button reject" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="pending">撤回公开</button>
+          <button class="small-button danger" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="rejected">不采用</button>`;
+      }
+    }
+    return `
     <div class="admin-proposal-row review-proposal-row" data-row-id="${escapeHtml(proposal.id)}">
-      ${type === 'pending' || type === 'rejected'
-        ? `<label class="review-check"><input type="checkbox" class="proposal-checkbox" data-type="${type}" data-id="${escapeHtml(proposal.id)}"><span class="sr-only">选择 ${escapeHtml(proposal.title)}</span></label>`
+      ${selectable
+        ? `<label class="review-check"><input type="checkbox" class="proposal-checkbox" data-type="${type}" data-id="${escapeHtml(proposal.id)}"${selectedProposals[type].has(proposal.id) ? ' checked' : ''}${locked ? ' disabled' : ''}><span class="sr-only">选择 ${escapeHtml(proposal.title)}</span></label>`
         : '<span class="review-check-spacer" aria-hidden="true"></span>'}
       <div>
         <div class="review-proposal-topline">
@@ -478,17 +532,89 @@ function renderReviewList(container, proposals, type) {
           <strong>${escapeHtml(proposal.title)}</strong>
         </div>
         <p class="proposal-desc">${escapeHtml(proposal.description)}</p>
+        <p class="review-meta">${metaBits.join(' · ')}${linkHtml}</p>
       </div>
-      <div class="admin-row-actions">
-        ${type === 'pending' ? `
-          <button class="small-button approve" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="approved">通过</button>
-          <button class="small-button reject" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="rejected">不采用</button>
-        ` : (type === 'rejected' ? `
-          <button class="small-button approve" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="pending">重新审查</button>
-        ` : '')}
-      </div>
-    </div>
-  `).join('');
+      <div class="admin-row-actions">${actions}</div>
+    </div>`;
+  }).join('');
+  if (selectable) updateBatchButtons();
+}
+
+function selectedIds(type) {
+  return [...selectedProposals[type]];
+}
+
+function updateBatchButtons() {
+  const locked = reviewLocked();
+  const pendingCount = selectedProposals.pending.size;
+  const rejectedCount = selectedProposals.rejected.size;
+  if (els.batchApprove) els.batchApprove.disabled = locked || pendingCount === 0;
+  if (els.batchReject) els.batchReject.disabled = locked || pendingCount === 0;
+  if (els.batchDeletePending) els.batchDeletePending.disabled = locked || pendingCount === 0;
+  if (els.batchRereview) els.batchRereview.disabled = locked || rejectedCount === 0;
+  if (els.batchDeleteRejected) els.batchDeleteRejected.disabled = locked || rejectedCount === 0;
+  if (els.selectAllPending) els.selectAllPending.disabled = locked;
+  if (els.selectAllRejected) els.selectAllRejected.disabled = locked;
+
+  const pendingBoxes = document.querySelectorAll('.proposal-checkbox[data-type="pending"]');
+  if (els.selectAllPending) {
+    els.selectAllPending.checked = pendingBoxes.length > 0 && pendingCount === pendingBoxes.length;
+    els.selectAllPending.indeterminate = pendingCount > 0 && pendingCount < pendingBoxes.length;
+  }
+  const rejectedBoxes = document.querySelectorAll('.proposal-checkbox[data-type="rejected"]');
+  if (els.selectAllRejected) {
+    els.selectAllRejected.checked = rejectedBoxes.length > 0 && rejectedCount === rejectedBoxes.length;
+    els.selectAllRejected.indeterminate = rejectedCount > 0 && rejectedCount < rejectedBoxes.length;
+  }
+}
+
+async function runBatch(action, type, idsOverride) {
+  if (reviewLocked() && action !== 'rereview') {
+    return showToast('本轮投票或执行已经开始，不能再修改提案。', 'error');
+  }
+  const ids = idsOverride || selectedIds(type);
+  if (!ids.length) return showToast('请先勾选要处理的提案。', 'error');
+  const isSingle = Boolean(idsOverride) && ids.length === 1;
+  const confirmText = isSingle
+    ? {
+        approve: '确定通过这条提案吗？通过后会在访客页面公开。',
+        reject: '确定把这条提案标记为不采用吗？',
+        rereview: '确定把这条未采用提案重新放回待审核吗？',
+        delete: '确定永久删除这条提案吗？删除后无法恢复。'
+      }
+    : {
+        approve: `确定批量通过这 ${ids.length} 条提案吗？通过后会在访客页面公开。`,
+        reject: `确定把这 ${ids.length} 条提案标记为不采用吗？`,
+        rereview: `确定把这 ${ids.length} 条未采用提案重新放回待审核吗？`,
+        delete: `确定永久删除这 ${ids.length} 条提案吗？删除后无法恢复。`
+      };
+  if (!confirm(confirmText[action] || '确定执行这项操作吗？')) return;
+  const res = await api('/api/admin/proposals/batch', {
+    method: 'POST',
+    headers: { 'X-Admin-Key': state.adminKey },
+    body: JSON.stringify({ ids, action })
+  });
+  if (res.ok) {
+    ids.forEach((id) => selectedProposals[type]?.delete(id));
+    const doneText = isSingle
+      ? {
+          approve: '提案已通过并公开。',
+          reject: '提案已标记为不采用。',
+          rereview: '提案已回到待审核。',
+          delete: '提案已删除。'
+        }
+      : {
+          approve: '已批量通过并公开。',
+          reject: '已批量标记为不采用。',
+          rereview: '已批量放回待审核。',
+          delete: '已批量删除。'
+        };
+    showToast(doneText[action] || '操作完成。');
+    await loadAdmin(false);
+    await loadPublic(false);
+  } else {
+    showToast(res.error || '操作失败', 'error');
+  }
 }
 
 function renderPhaseActions(phase, data) {
@@ -522,6 +648,12 @@ function renderPhaseActions(phase, data) {
 }
 
 document.addEventListener('click', async (e) => {
+  const deleteBtn = e.target.closest('[data-delete-id]');
+  if (deleteBtn) {
+    await runBatch('delete', deleteBtn.dataset.deleteType, [deleteBtn.dataset.deleteId]);
+    return;
+  }
+
   const reviewBtn = e.target.closest('[data-review-id]');
   if (reviewBtn) {
     const proposalId = reviewBtn.dataset.reviewId;
@@ -578,10 +710,13 @@ document.addEventListener('click', async (e) => {
 
 function openAdmin() {
   if (els.adminModal) els.adminModal.hidden = false;
+  document.body.style.overflow = 'hidden';
   if (state.adminKey) loadAdmin(false);
+  else els.adminKey?.focus();
 }
 function closeAdmin() {
   if (els.adminModal) els.adminModal.hidden = true;
+  document.body.style.overflow = '';
 }
 
 els.adminOpen?.addEventListener('click', openAdmin);
@@ -604,12 +739,13 @@ els.adminLoginForm?.addEventListener('submit', async (e) => {
 });
 
 els.adminLogout?.addEventListener('click', () => {
-  state.adminKey = '';
-  state.admin = null;
-  sessionStorage.removeItem('flycode-admin-key');
-  els.adminLoginView.hidden = false;
-  els.adminDashboard.hidden = true;
-  els.adminKey.value = '';
+  resetAdminSession('', false);
+  if (els.adminKey) els.adminKey.value = '';
+  showToast('已退出工作台。');
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && els.adminModal && !els.adminModal.hidden) closeAdmin();
 });
 
 els.adminRefresh?.addEventListener('click', async () => {
@@ -708,6 +844,37 @@ document.querySelectorAll('.review-tab').forEach(tabBtn => {
     if (pane) { pane.hidden = false; pane.classList.add('active'); }
   });
 });
+
+document.addEventListener('change', (e) => {
+  const box = e.target.closest('.proposal-checkbox');
+  if (!box) return;
+  const type = box.dataset.type;
+  const id = box.dataset.id;
+  if (!selectedProposals[type] || !id) return;
+  if (box.checked) selectedProposals[type].add(id);
+  else selectedProposals[type].delete(id);
+  updateBatchButtons();
+});
+
+function bindSelectAll(checkbox, type) {
+  checkbox?.addEventListener('change', () => {
+    const boxes = document.querySelectorAll(`.proposal-checkbox[data-type="${type}"]`);
+    selectedProposals[type].clear();
+    boxes.forEach((box) => {
+      box.checked = checkbox.checked;
+      if (checkbox.checked) selectedProposals[type].add(box.dataset.id);
+    });
+    updateBatchButtons();
+  });
+}
+bindSelectAll(els.selectAllPending, 'pending');
+bindSelectAll(els.selectAllRejected, 'rejected');
+
+els.batchApprove?.addEventListener('click', () => runBatch('approve', 'pending'));
+els.batchReject?.addEventListener('click', () => runBatch('reject', 'pending'));
+els.batchDeletePending?.addEventListener('click', () => runBatch('delete', 'pending'));
+els.batchRereview?.addEventListener('click', () => runBatch('rereview', 'rejected'));
+els.batchDeleteRejected?.addEventListener('click', () => runBatch('delete', 'rejected'));
 
 function init3DTilt(element, maxTilt = 8) {
   if (!element) return;
