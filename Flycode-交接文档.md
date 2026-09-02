@@ -1,8 +1,50 @@
 # Flycode 项目交接文档
 
 > 用途：在新对话中直接恢复 Flycode 项目上下文。
-> 更新时间：2026-09-02
+> 更新时间：2026-09-02（下午批次）
 > 项目负责人：用户本人（发起人、初期维护者和最终决策者）
+
+---
+
+## 最近更新日志
+
+### 2026-09-02 下午批次（commit 03ce0f2）
+
+**修复手机访问下载文件问题**：
+- **现象**：手机浏览器访问 flycode.online 时弹出下载 `.htm` 文件，而非正常显示网页
+- **根因**：CloudBase 云托管在响应头强制添加 `Content-Disposition: attachment`，导致浏览器将 HTML 响应作为附件下载
+- **修复方案**：
+  1. 在 Cloudflare Worker (`worker.mjs`) 边缘层拦截并改写响应头，将 `attachment` 强制改为 `inline`（commit `03ce0f2`）
+  2. 在 server.js 所有静态文件响应中显式设置 `Content-Disposition: inline`（commit `6ae74ce`）作为双重保险
+- **验证**：手机访问 flycode.online 正常显示网页，响应头 `Content-Disposition: inline` 已生效
+
+**管理页批量审核功能修复**（commit `c52dd5e`）：
+- **现象**：管理页「批量通过」「批量删除」按钮永远灰色，点击无反应；「全选」复选框无效
+- **根因**：UI 重构时整段批量逻辑（`selectedProposals` 集合和事件监听器）丢失，只留下了 DOM 元素和样式
+- **修复**：补回 `selectedProposals` Set、单行复选框 change 事件、全选复选框 change 事件、批量通过/删除按钮 click 事件及按钮启用/禁用逻辑
+- **验证**：管理页勾选提案后批量按钮可点击，全选/取消全选正常，批量操作调用后端 `/api/admin/proposals/batch` 接口
+
+**管理页选择列布局修复**（commit `c52dd5e`）：
+- **现象**：管理页第一列「选择」竖着显示，挤占空间
+- **根因**：`.review-check`（复选框列）和 `.select-all-label`（全选标签）样式在 UI 重构时丢失；checkbox label 文字「选择 提案ID」未隐藏，被挤在 24px 窄列里竖排显示
+- **修复**：
+  - 补回 `.review-check { width: 24px; text-align: center; }` 样式
+  - 补回 `.select-all-label { display: flex; align-items: center; justify-content: center; gap: 4px; }` 样式
+  - 隐藏 checkbox label 文字（`<span class="sr-only">`），只保留复选框可见
+- **验证**：选择列横向显示，宽度 24px，复选框居中
+
+### 2026-09-02 上午批次
+
+**主题切换逻辑重构**：
+- 移除旧的三态循环切换逻辑，改为明确的浅色/深色/跟随系统三按钮
+- 修复了深色模式下无法手动切回浅色的问题（iOS Safari 等系统深色模式锁定场景）
+
+**管理后台登录修复**：
+- 恢复 `X-Admin-Key` 请求头认证和原始 `/api/admin/*` 接口
+- 移除了临时 `/api/auth/*` 方案
+
+**代码清理**：
+- 删除主题调试临时文件 `theme-toggle-test.html`
 
 ---
 
@@ -52,16 +94,18 @@ CloudBase 原始健康检查：
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health
 ```
 
-2026-09-02 已从外部实际验证：
+2026-09-02 下午已从外部实际验证：
 
 ```text
 https://flycode.online/: HTTP 200，返回新版首页（主题切换、3D 水晶、共创进行中）
+  Content-Disposition: inline（已修复手机下载问题）
 https://flycode.online/api/health: HTTP 200
-  release = 2cdf32b68675118b27a70b4c24dbd79cf86e5725
+  release = 6ae74ce7648a4e1d51bfdebe8f85b7fab52fe572
   storage = cloudbase
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health: 同一 release
 https://flycode.online/api/state: HTTP 200，返回当前 PostgreSQL 数据
 首页脚本：/app.js?v=20260902-05
+管理页：批量审核功能已修复，选择列横向显示
 ```
 
 当前访问链路：
