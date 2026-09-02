@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flycode 主题调试面板</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 20px;
+      background: #0a0a0a;
+      color: #fff;
+      line-height: 1.6;
+    }
+    .panel {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-bottom: 15px;
+      color: #4ade80;
+      font-size: 18px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .label { color: #888; }
+    .value {
+      color: #fff;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    button {
+      width: 100%;
+      padding: 15px;
+      margin: 10px 0;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:active {
+      background: #2563eb;
+    }
+    .error { color: #ef4444; }
+    .success { color: #4ade80; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h2>📊 当前状态</h2>
+    <div class="info-row">
+      <span class="label">data-theme 属性:</span>
+      <span class="value" id="data-theme">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">localStorage 值:</span>
+      <span class="value" id="storage-value">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">系统偏好:</span>
+      <span class="value" id="system-theme">-</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🎨 CSS 变量值</h2>
+    <div class="info-row">
+      <span class="label">--bg-base:</span>
+      <span class="value" id="css-bg-base">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">--ink-900:</span>
+      <span class="value" id="css-ink-900">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">body.background:</span>
+      <span class="value" id="body-bg">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">body.color:</span>
+      <span class="value" id="body-color">-</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>🔧 操作</h2>
+    <button onclick="testToggle()">🔄 模拟点击主题切换</button>
+    <button onclick="forceLight()">☀️ 强制浅色模式</button>
+    <button onclick="forceDark()">🌙 强制深色模式</button>
+    <button onclick="clearStorage()">🗑️ 清除 localStorage</button>
+    <button onclick="refresh()">🔃 刷新状态</button>
+  </div>
+
+  <div class="panel">
+    <h2>📝 日志</h2>
+    <div id="log" style="font-family: monospace; font-size: 12px; color: #888;"></div>
+  </div>
+
+  <script>
+    function log(msg, type = 'info') {
+      const logEl = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
+      const color = type === 'error' ? '#ef4444' : type === 'success' ? '#4ade80' : '#888';
+      logEl.innerHTML = `<div style="color:${color}">[${time}] ${msg}</div>` + logEl.innerHTML;
+    }
+
+    function refresh() {
+      // 读取 data-theme
+      const mainWindow = window.opener || window.parent;
+      let dataTheme = 'N/A';
+      let storageValue = 'N/A';
+      let systemTheme = 'N/A';
+      let bgBase = 'N/A';
+      let ink900 = 'N/A';
+      let bodyBg = 'N/A';
+      let bodyColor = 'N/A';
+
+      try {
+        // 打开主页面
+        const targetUrl = 'http://localhost:4173';
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = targetUrl;
+        document.body.appendChild(iframe);
+
+        iframe.onload = function() {
+          try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            const html = doc.documentElement;
+
+            dataTheme = html.getAttribute('data-theme') || '未设置';
+            storageValue = localStorage.getItem('flycode-theme-choice') || '未设置';
+            systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            
+            const styles = window.getComputedStyle(html);
+            bgBase = styles.getPropertyValue('--bg-base').trim() || '未定义';
+            ink900 = styles.getPropertyValue('--ink-900').trim() || '未定义';
+            
+            const bodyStyles = window.getComputedStyle(doc.body);
+            bodyBg = bodyStyles.backgroundColor;
+            bodyColor = bodyStyles.color;
+
+            updateDisplay();
+            log('状态刷新成功', 'success');
+          } catch(e) {
+            log('无法读取 iframe 内容: ' + e.message, 'error');
+          }
+        };
+      } catch(e) {
+        log('读取失败: ' + e.message, 'error');
+      }
+
+      // 本地测试
+      dataTheme = localStorage.getItem('flycode-theme-choice') || 'auto';
+      systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      storageValue = localStorage.getItem('flycode-theme-choice') || '未设置';
+
+      updateDisplay();
+      
+      function updateDisplay() {
+        document.getElementById('data-theme').textContent = dataTheme;
+        document.getElementById('storage-value').textContent = storageValue;
+        document.getElementById('system-theme').textContent = systemTheme;
+        document.getElementById('css-bg-base').textContent = bgBase;
+        document.getElementById('css-ink-900').textContent = ink900;
+        document.getElementById('body-bg').textContent = bodyBg;
+        document.getElementById('body-color').textContent = bodyColor;
+      }
+    }
+
+    function testToggle() {
+      const current = localStorage.getItem('flycode-theme-choice') || 'auto';
+      const next = current === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('flycode-theme-choice', next);
+      log(`主题切换: ${current} → ${next}`, 'success');
+      refresh();
+    }
+
+    function forceLight() {
+      localStorage.setItem('flycode-theme-choice', 'light');
+      log('强制设置为浅色模式', 'success');
+      refresh();
+    }
+
+    function forceDark() {
+      localStorage.setItem('flycode-theme-choice', 'dark');
+      log('强制设置为深色模式', 'success');
+      refresh();
+    }
+
+    function clearStorage() {
+      localStorage.removeItem('flycode-theme-choice');
+      log('已清除 localStorage', 'success');
+      refresh();
+    }
+
+    // 初始化
+    refresh();
+    log('调试面板已加载');
+  </script>
+</body>
+</html>

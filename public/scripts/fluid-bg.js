@@ -86,9 +86,12 @@
   function animate() {
     requestAnimationFrame(animate);
     time += 0.015;
-    ctx.clearRect(0, 0, width, height);
-
+    
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    
+    // 填充 Canvas 背景色（跟随主题），而不是 clearRect
+    ctx.fillStyle = isDark ? '#06070d' : '#f8fafc';
+    ctx.fillRect(0, 0, width, height);
 
     // 1. 绘制细腻柔和的引力涟漪 (无厚重阴影，极速渲染)
     for (let i = ripples.length - 1; i >= 0; i--) {

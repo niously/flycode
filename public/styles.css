@@ -400,12 +400,28 @@ html[data-theme="dark"] .theme-icon-dark { display: block; }
   font-family: var(--font-mono);
   font-size: 11px;
 }
+.round-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--ink-700);
+}
 .pulse-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #f43f5e;
   box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.25);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+@keyframes pulse-glow {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.4), 0 0 8px rgba(244, 63, 94, 0.6);
+  }
+  50% { 
+    box-shadow: 0 0 0 6px rgba(244, 63, 94, 0), 0 0 12px rgba(244, 63, 94, 0.8);
+  }
 }
 .round-track {
   height: 4px;
