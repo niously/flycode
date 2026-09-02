@@ -22,6 +22,21 @@
 
   <!-- Three.js CDN 用于纯原生 3D WebGL 实时渲染 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <!-- 关键：内联同步主题脚本，必须在 CSS 加载前执行，防止 FOUC 和系统深色模式锁死 -->
+  <script>
+    (function() {
+      const STORAGE_KEY = 'flycode-theme-choice';
+      function getSystemTheme() {
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const choice = (saved === 'light' || saved === 'dark' || saved === 'auto') ? saved : 'auto';
+      const actualTheme = (choice === 'auto') ? getSystemTheme() : choice;
+      document.documentElement.setAttribute('data-theme', actualTheme);
+    })();
+  </script>
+  
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
