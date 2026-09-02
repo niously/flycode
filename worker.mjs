@@ -41,6 +41,13 @@ export default {
       });
       const responseHeaders = new Headers(response.headers);
       responseHeaders.set('cache-control', 'no-store');
+      // 覆盖 CloudBase 添加的 Content-Disposition: attachment
+      if (responseHeaders.has('content-disposition')) {
+        const disposition = responseHeaders.get('content-disposition');
+        if (disposition === 'attachment') {
+          responseHeaders.set('content-disposition', 'inline');
+        }
+      }
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
