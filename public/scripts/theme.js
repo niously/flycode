@@ -17,6 +17,11 @@
     document.documentElement.setAttribute('data-theme', actualTheme);
     document.documentElement.className = `theme-${actualTheme}`;
     document.documentElement.style.colorScheme = actualTheme;
+    
+    // 强制浏览器重新计算所有 CSS 变量（修复某些移动端浏览器不更新的问题）
+    document.body.style.display = 'none';
+    document.body.offsetHeight; // 触发 reflow
+    document.body.style.display = '';
 
     const sunIcon = document.querySelector('#theme-icon-sun');
     const moonIcon = document.querySelector('#theme-icon-moon');
