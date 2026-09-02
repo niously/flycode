@@ -181,7 +181,7 @@ body {
 .site-shell {
   width: min(100%, 1320px);
   margin: 0 auto;
-  padding: 0 32px;
+  padding: 100px 32px 0; /* 顶部留出空间给固定导航栏 */
   position: relative;
   z-index: 1;
 }
