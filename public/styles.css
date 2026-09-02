@@ -13,7 +13,7 @@
 /* ==========================================================================
    浅色模式：【Stripe 晨光流光 + 梦幻粉紫蓝晶】
    ========================================================================== */
-html[data-theme="light"], :root {
+html[data-theme="light"] {
   --bg-base: #f8fafc;
   --ink-900: #090d16;
   --ink-700: #1e293b;
@@ -270,6 +270,7 @@ html[data-theme="light"] .cursor-glow {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  border-radius: 8px;
 }
 html[data-theme="light"] .theme-icon-dark { display: none; }
 html[data-theme="light"] .theme-icon-light { display: block; }

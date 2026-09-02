@@ -16,6 +16,7 @@
     // 强制设置 HTML 的 data-theme 属性（优先级最高）
     document.documentElement.setAttribute('data-theme', actualTheme);
     document.documentElement.className = `theme-${actualTheme}`;
+    document.documentElement.style.colorScheme = actualTheme;
 
     const sunIcon = document.querySelector('#theme-icon-sun');
     const moonIcon = document.querySelector('#theme-icon-moon');

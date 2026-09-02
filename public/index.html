@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <meta name="description" content="Flycode：大家一起来讨论，参与网站的定制。">
   <title>Flycode · 一起定制一个网站</title>
   
@@ -33,7 +34,13 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       const choice = (saved === 'light' || saved === 'dark' || saved === 'auto') ? saved : 'auto';
       const actualTheme = (choice === 'auto') ? getSystemTheme() : choice;
+      
+      // 强制设置 data-theme 属性，确保优先级最高
       document.documentElement.setAttribute('data-theme', actualTheme);
+      document.documentElement.style.colorScheme = actualTheme;
+      
+      // 将选择存回，确保后续脚本能读取
+      localStorage.setItem(STORAGE_KEY, choice);
     })();
   </script>
   
