@@ -221,7 +221,7 @@ function renderPublic() {
   if (!data) return;
 
   const currentPhase = data.current_phase || {};
-  if (els.roundNumber) els.roundNumber.textContent = `ROUND ${String(currentPhase.id || 1).padStart(2, '0')}`;
+  if (els.roundNumber) els.roundNumber.textContent = `第 ${String(currentPhase.id || 1).padStart(2, '0')} 轮`;
   if (els.roundStatus) els.roundStatus.textContent = statusText[currentPhase.status] || currentPhase.status || '进行中';
   if (els.boardPhaseId) els.boardPhaseId.textContent = `${String(currentPhase.id || 1).padStart(2, '0')} / ${String(data.summary?.total_rounds || 1).padStart(2, '0')}`;
   if (els.currentQuestion) els.currentQuestion.textContent = currentPhase.question || '你希望它先做什么？';
@@ -318,14 +318,12 @@ function renderTimeline(timeline) {
   `).join('');
 }
 
-// 投票交互与粒子浮动
 els.proposalList?.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-vote-id]');
   if (!btn) return;
   const id = btn.dataset.voteId;
   btn.disabled = true;
 
-  // 触发点击波纹
   createRipple(e, btn);
 
   const res = await api('/api/vote', {
@@ -333,7 +331,6 @@ els.proposalList?.addEventListener('click', async (e) => {
     body: JSON.stringify({ proposal_id: id, visitor_id: state.visitorId })
   });
   if (res.ok) {
-    // 弹出 +1 绿色向上飞升粒子
     spawnVoteFlyParticle(e.clientX, e.clientY);
     showToast(res.message || '投票已记录！');
     await loadPublic(false);
@@ -366,7 +363,6 @@ function spawnVoteFlyParticle(x, y) {
   setTimeout(() => p.remove(), 900);
 }
 
-// 鼠标聚光灯跟随
 const cursorGlow = document.querySelector('#cursor-glow');
 if (cursorGlow) {
   window.addEventListener('mousemove', (e) => {
@@ -375,10 +371,9 @@ if (cursorGlow) {
   });
 }
 
-// 投稿提交
 els.proposalForm?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (document.querySelector('#proposal-website')?.value) return; // 防爬虫蜜罐
+  if (document.querySelector('#proposal-website')?.value) return;
   const title = els.proposalTitle.value.trim();
   const description = els.proposalDescription.value.trim();
   const author = document.querySelector('#proposal-author')?.value.trim() || '';
@@ -410,7 +405,6 @@ els.proposalForm?.addEventListener('submit', async (e) => {
 els.proposalTitle?.addEventListener('input', () => { updateCounters(); saveDraft(); });
 els.proposalDescription?.addEventListener('input', () => { updateCounters(); saveDraft(); });
 
-// 管理员工作台逻辑
 async function loadAdmin(showFeedback = true) {
   const res = await api('/api/admin/state');
   if (!res.ok) return false;
@@ -477,7 +471,6 @@ function renderReviewList(tab, list) {
   `).join('');
 }
 
-// 审查单项操作
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.admin-row-actions button');
   if (!btn) return;
@@ -541,7 +534,6 @@ els.adminLogout?.addEventListener('click', () => {
   els.adminKey.value = '';
 });
 
-// 管理端 Tab 切换
 document.querySelectorAll('.review-tab').forEach(tabBtn => {
   tabBtn.addEventListener('click', () => {
     document.querySelectorAll('.review-tab').forEach(b => b.classList.remove('active'));
@@ -552,56 +544,6 @@ document.querySelectorAll('.review-tab').forEach(tabBtn => {
   });
 });
 
-/* ==========================================================================
-   双主题切换引擎 (手机端与桌面端完全兼容)
-   支持：浅色 ⇄ 深色 双向切换，默认跟随系统
-   ========================================================================== */
-const themeToggleBtn = document.querySelector('#theme-toggle');
-const themeIconSun = document.querySelector('#theme-icon-sun');
-const themeIconMoon = document.querySelector('#theme-icon-moon');
-
-function getSystemTheme() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('flycode-theme', theme);
-  
-  // 更新按钮图标
-  if (themeIconSun && themeIconMoon) {
-    if (theme === 'dark') {
-      themeIconSun.style.display = 'block';
-      themeIconMoon.style.display = 'none';
-    } else {
-      themeIconSun.style.display = 'none';
-      themeIconMoon.style.display = 'block';
-    }
-  }
-}
-
-// 初始化：优先读取用户设置，否则跟随系统
-const savedTheme = localStorage.getItem('flycode-theme');
-const initialTheme = savedTheme || getSystemTheme();
-applyTheme(initialTheme);
-
-// 监听系统主题变化（仅在用户未手动设置时生效）
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  if (!localStorage.getItem('flycode-theme')) {
-    applyTheme(e.matches ? 'dark' : 'light');
-  }
-});
-
-// 点击切换按钮：浅色 ⇄ 深色
-themeToggleBtn?.addEventListener('click', () => {
-  const current = document.documentElement.getAttribute('data-theme');
-  const next = current === 'dark' ? 'light' : 'dark';
-  applyTheme(next);
-});
-
-/* ==========================================================================
-   3D 视差倾斜交互 (Tilt Parallax)
-   ========================================================================== */
 function init3DTilt(element, maxTilt = 8) {
   if (!element) return;
   element.addEventListener('mousemove', (e) => {
@@ -625,7 +567,6 @@ loadDraft();
 loadPublic();
 window.setInterval(() => loadPublic(false), 15000);
 
-// 平滑滚动到指定区域 (data-scroll-to)
 document.addEventListener('click', (e) => {
   const trigger = e.target.closest('[data-scroll-to]');
   if (!trigger) return;
