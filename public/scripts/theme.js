@@ -1,76 +1,98 @@
 /* ==========================================================================
-   三态主题切换引擎：浅色 → 深色 → 跟随系统 → 浅色
-   手机端与桌面端完全兼容
+   Flycode 智能双向主题切换引擎（修复系统深色模式锁死/切换点两次问题）
    ========================================================================== */
-const themeToggleBtn = document.querySelector('#theme-toggle');
-const themeIconSun = document.querySelector('#theme-icon-sun');
-const themeIconMoon = document.querySelector('#theme-icon-moon');
+(function() {
+  const STORAGE_KEY = 'flycode-theme-choice'; // 'light' | 'dark' | 'auto'
 
-function getSystemTheme() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
+  function getSystemTheme() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
 
-function applyTheme(userChoice) {
-  // userChoice 可能是 'light', 'dark', 或 'auto'
-  const actualTheme = (userChoice === 'auto') ? getSystemTheme() : userChoice;
-  
-  document.documentElement.setAttribute('data-theme', actualTheme);
-  localStorage.setItem('flycode-theme-choice', userChoice);
-  
-  // 更新按钮图标与提示
-  if (themeIconSun && themeIconMoon) {
-    if (actualTheme === 'dark') {
-      themeIconSun.style.display = 'block';
-      themeIconMoon.style.display = 'none';
-    } else {
-      themeIconSun.style.display = 'none';
-      themeIconMoon.style.display = 'block';
+  function getSavedChoice() {
+    return localStorage.getItem(STORAGE_KEY) || 'auto';
+  }
+
+  function updateDOM(actualTheme, choice) {
+    document.documentElement.setAttribute('data-theme', actualTheme);
+
+    const sunIcon = document.querySelector('#theme-icon-sun');
+    const moonIcon = document.querySelector('#theme-icon-moon');
+    const toggleBtn = document.querySelector('#theme-toggle');
+
+    if (sunIcon && moonIcon) {
+      if (actualTheme === 'dark') {
+        sunIcon.style.display = 'block';
+        moonIcon.style.display = 'none';
+      } else {
+        sunIcon.style.display = 'none';
+        moonIcon.style.display = 'block';
+      }
+    }
+
+    if (toggleBtn) {
+      const stateDesc = choice === 'auto'
+        ? `跟随系统(${actualTheme === 'dark' ? '深色' : '浅色'})`
+        : (actualTheme === 'dark' ? '深色' : '浅色');
+      toggleBtn.setAttribute('title', `当前主题：${stateDesc} · 点击切换`);
     }
   }
-  
-  // 更新按钮 title 提示
-  if (themeToggleBtn) {
-    const titles = {
-      'light': '当前：浅色模式 · 点击切换到深色',
-      'dark': '当前：深色模式 · 点击切换到跟随系统',
-      'auto': `当前：跟随系统（${actualTheme === 'dark' ? '深色' : '浅色'}）· 点击切换到浅色`
-    };
-    themeToggleBtn.title = titles[userChoice] || '切换主题';
+
+  function setChoice(newChoice) {
+    localStorage.setItem(STORAGE_KEY, newChoice);
+    const actual = newChoice === 'auto' ? getSystemTheme() : newChoice;
+    updateDOM(actual, newChoice);
   }
-}
 
-// 初始化：优先读取用户选择，否则默认跟随系统
-const savedChoice = localStorage.getItem('flycode-theme-choice') || 'auto';
-applyTheme(savedChoice);
+  // 1. 初始化主题
+  const initialChoice = getSavedChoice();
+  const initialActual = initialChoice === 'auto' ? getSystemTheme() : initialChoice;
+  updateDOM(initialActual, initialChoice);
 
-// 监听系统主题变化（当用户选择 auto 时实时跟随）
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const currentChoice = localStorage.getItem('flycode-theme-choice');
-  if (currentChoice === 'auto' || !currentChoice) {
-    applyTheme('auto');
+  // 2. 监听系统深浅色动态变化
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      const currentChoice = getSavedChoice();
+      if (currentChoice === 'auto') {
+        updateDOM(e.matches ? 'dark' : 'light', 'auto');
+      }
+    });
   }
-});
 
-// 点击切换按钮：浅色 → 深色 → 跟随系统 → 浅色
-themeToggleBtn?.addEventListener('click', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  
-  const currentChoice = localStorage.getItem('flycode-theme-choice') || 'auto';
-  let nextChoice;
-  
-  if (currentChoice === 'light') {
-    nextChoice = 'dark';
-  } else if (currentChoice === 'dark') {
-    nextChoice = 'auto';
+  // 3. 点击切换逻辑：根据当前屏幕显示的实际主题做精准翻转，绝不出现“点一次没反应/点两次才切换”
+  function handleToggle(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    // 获取当前屏幕上生效的主题
+    const currentActiveTheme = document.documentElement.getAttribute('data-theme') || getSystemTheme();
+    // 直接翻转到对立主题
+    const nextTheme = (currentActiveTheme === 'dark') ? 'light' : 'dark';
+
+    setChoice(nextTheme);
+
+    if (navigator.vibrate) {
+      try { navigator.vibrate(12); } catch (_) {}
+    }
+  }
+
+  // DOM 就绪后绑定事件
+  function bindButton() {
+    const btn = document.querySelector('#theme-toggle');
+    if (btn) {
+      btn.removeEventListener('click', handleToggle);
+      btn.addEventListener('click', handleToggle);
+      // 重新同步一次按钮状态
+      const choice = getSavedChoice();
+      const actual = choice === 'auto' ? getSystemTheme() : choice;
+      updateDOM(actual, choice);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindButton);
   } else {
-    nextChoice = 'light';
+    bindButton();
   }
-  
-  applyTheme(nextChoice);
-  
-  // 手机端触觉反馈
-  if (navigator.vibrate) {
-    navigator.vibrate(10);
-  }
-});
+})();

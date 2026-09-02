@@ -156,16 +156,16 @@
     pointLight3.position.y = Math.sin(time * 1.2) * 2.5;
     pointLight3.position.z = 2.5;
 
-    // 永远自转并带有物理惯性
+    // 永远自转并带有物理惯性（降低桌面自转速度，更加优雅舒缓）
     if (!isDragging) {
-      crystal.rotation.y += 0.01 + vx;
-      crystal.rotation.x += 0.005 + vy;
+      crystal.rotation.y += 0.0035 + vx;
+      crystal.rotation.x += 0.0018 + vy;
       vx *= 0.95;
       vy *= 0.95;
     }
 
-    innerCore.rotation.y -= 0.025;
-    innerCore.rotation.z += 0.015;
+    innerCore.rotation.y -= 0.008;
+    innerCore.rotation.z += 0.005;
 
     renderer.render(scene, camera);
   }
