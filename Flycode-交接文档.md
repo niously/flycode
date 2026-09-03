@@ -8,6 +8,43 @@
 
 ## 最近更新日志
 
+### 2026-09-03 批次：主站迁移 Cloudflare Workers + D1（免备案架构切换）
+
+**背景**：为避开 ICP 备案要求，把主站从「Cloudflare Worker 代理 → CloudBase 大陆后端」切换为「Cloudflare Workers 全托管（前端资产 + API + D1 数据库）」。服务器不在中国大陆，无需备案。
+
+**已完成的操作（全部实测验证）**：
+1. 用户下载正式站备份 `flycode-backup-2026-09-03.json`（4 条提案：水印去除/接码接口=approved，看片/ai去衣=rejected）
+2. 数据完整导入 D1 数据库 `flycode-d1`（表 `flycode_state`，id=main），D1 侧与 CloudBase 侧 `/api/state` 逐项核对一致
+3. 本机 `wrangler login` 授权成功（wrangler 4.128.0）
+4. D1 测试站 `d1.flycode.online` 部署新版代码验证通过（彩排）
+5. 新增本地配置 `wrangler.main.toml`（含 `[[d1_databases]]` 绑定，**部署日志必须看到 env.FLYCODE_DB**），部署同名 Worker `flycode`，自动继承控制台已有路由 `flycode.online/*`
+6. 写入测试：POST /api/proposals 返回 201，D1 行数 4→5，恢复后回到 4
+7. 大陆网络实测：首页整页约 0.57-0.6s，连接约 0.17s，服务节点 SEA（西雅图），`cdn-cgi/trace` loc=CN
+
+**当前访问链路（2026-09-03 起）**：
+```text
+flycode.online -> Cloudflare Worker「flycode」（完整站点：ASSETS 前端 + API + D1）
+数据库：Cloudflare D1 flycode-d1（免费，海外）
+CloudBase 云托管 + PostgreSQL 仍在运行，仅作为回退保险，不再是主站依赖
+```
+
+**回退方法（一条命令，秒级生效）**：
+```bash
+cd C:/Users/l2104/flycode && npx wrangler deploy
+```
+即用原 `wrangler.toml` 重新部署代理版 Worker，主站立刻恢复 CloudBase 链路。再切回 D1 版：`npx wrangler deploy --config wrangler.main.toml`。
+
+**待办（重要）**：
+- [ ] Worker `flycode` 需配置 Secret `FLYCODE_ADMIN_KEY`（值=CloudBase 环境变量同名项），否则管理页无法登录。已验证未配置时 /api/admin/state 返回 401
+- [ ] `d1.flycode.online` 现在与主站共用同一 D1 数据库，已不是独立测试站；测试站操作会直接影响主站数据
+- [ ] 大陆手机 Wi-Fi/流量实测主站（首页、投稿、管理入口）
+- [ ] CloudBase 停用与否待观察一周后再定
+
+**注意**：
+- `wrangler.main.toml`、`.import-main.sql` 已加入 .gitignore，是本机切换/迁移工具文件
+- wrangler 已登录，本机可直接部署，无需每次浏览器授权
+- 部署主站后若 /api/state 返回 500，先查部署日志里有没有 `env.FLYCODE_DB (flycode-d1)` 绑定
+
 ### 2026-09-02 下午批次（commit 03ce0f2）
 
 **修复手机访问下载文件问题**：

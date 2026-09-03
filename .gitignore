@@ -8,3 +8,6 @@ flycode-cloudbase-run.zip
 supabase/.temp/
 supabase/.branches/
 .wrangler/
+.import-main.sql
+wrangler.main.toml
+wrangler.local-backup.toml
