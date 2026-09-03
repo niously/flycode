@@ -1,7 +1,7 @@
 # Flycode 项目交接文档
 
 > 用途：在新对话中直接恢复 Flycode 项目上下文。
-> 更新时间：2026-09-02（下午批次）
+> 更新时间：2026-09-03（主站迁移 Cloudflare Workers + D1 完成批次）
 > 项目负责人：用户本人（发起人、初期维护者和最终决策者）
 
 ---
@@ -20,6 +20,7 @@
 5. 新增本地配置 `wrangler.main.toml`（含 `[[d1_databases]]` 绑定，**部署日志必须看到 env.FLYCODE_DB**），部署同名 Worker `flycode`，自动继承控制台已有路由 `flycode.online/*`
 6. 写入测试：POST /api/proposals 返回 201，D1 行数 4→5，恢复后回到 4
 7. 大陆网络实测：首页整页约 0.57-0.6s，连接约 0.17s，服务节点 SEA（西雅图），`cdn-cgi/trace` loc=CN
+8. 配置 Cloudflare Secret `FLYCODE_ADMIN_KEY`（值=CloudBase 环境变量同名项），管理页登录验证通过（错误密钥 401，正确密钥返回 4 条含未采用提案）
 
 **当前访问链路（2026-09-03 起）**：
 ```text
@@ -35,17 +36,16 @@ cd C:/Users/l2104/flycode && npx wrangler deploy
 即用原 `wrangler.toml` 重新部署代理版 Worker，主站立刻恢复 CloudBase 链路。再切回 D1 版：`npx wrangler deploy --config wrangler.main.toml`。
 
 **待办（重要）**：
-- [ ] Worker `flycode` 需配置 Secret `FLYCODE_ADMIN_KEY`（值=CloudBase 环境变量同名项），否则管理页无法登录。已验证未配置时 /api/admin/state 返回 401
-- [ ] `d1.flycode.online` 现在与主站共用同一 D1 数据库，已不是独立测试站；测试站操作会直接影响主站数据
 - [ ] 大陆手机 Wi-Fi/流量实测主站（首页、投稿、管理入口）
 - [ ] CloudBase 停用与否待观察一周后再定
+- [ ] 每日用量监控（Cloudflare 控制台 Metrics）
 
 **注意**：
 - `wrangler.main.toml`、`.import-main.sql` 已加入 .gitignore，是本机切换/迁移工具文件
 - wrangler 已登录，本机可直接部署，无需每次浏览器授权
 - 部署主站后若 /api/state 返回 500，先查部署日志里有没有 `env.FLYCODE_DB (flycode-d1)` 绑定
 
-### 2026-09-02 下午批次（commit 03ce0f2）
+### 2026-09-02 下午批次（commit 1035b12）
 
 **修复手机访问下载文件问题**：
 - **现象**：手机浏览器访问 flycode.online 时弹出下载 `.htm` 文件，而非正常显示网页
@@ -111,7 +111,7 @@ Flycode 是一个由网友参与定制和发展的共创网站。
 https://flycode.online
 ```
 
-CloudBase 原始地址（保留为后端和故障排查入口，不作为对外主入口）：
+CloudBase 原始地址（保留为回退保险，不对外使用）：
 
 ```text
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
@@ -131,18 +131,17 @@ CloudBase 原始健康检查：
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health
 ```
 
-2026-09-02 下午已从外部实际验证：
+2026-09-03 实测：
 
 ```text
 https://flycode.online/: HTTP 200，返回新版首页（主题切换、3D 水晶、共创进行中）
   Content-Disposition: inline（已修复手机下载问题）
 https://flycode.online/api/health: HTTP 200
-  release = 6ae74ce7648a4e1d51bfdebe8f85b7fab52fe572
-  storage = cloudbase
-https://flycode-305260-9-1465609042.sh.run.tcloudbase.com/api/health: 同一 release
-https://flycode.online/api/state: HTTP 200，返回当前 PostgreSQL 数据
-首页脚本：/app.js?v=20260902-05
-管理页：批量审核功能已修复，选择列横向显示
+  release = 03ce0f2a5495214cffdbb1b535c0d94fdeda12c3
+  storage = d1
+https://flycode.online/api/state: HTTP 200，返回 D1 数据库完整状态
+首页脚本：/app.js?v=20260903-01
+管理页：批量审核功能已修复，选择列横向显示，管理入口需 X-Admin-Key
 ```
 
 当前访问链路：
@@ -150,23 +149,21 @@ https://flycode.online/api/state: HTTP 200，返回当前 PostgreSQL 数据
 ```text
 flycode.online
 -> Cloudflare DNS（venkat.ns.cloudflare.com / becky.ns.cloudflare.com）
--> Cloudflare Worker（flycode，路由 flycode.online/*）
--> CloudBase 云托管
--> CloudBase PostgreSQL
+-> Cloudflare Worker（flycode，路由 flycode.online/*，全托管前端+API+D1）
+-> Cloudflare D1 数据库（海外，免备案）
 ```
 
 Cloudflare 免费套餐已启用。域名由 Spaceship 注册；DNS 已委托给 Cloudflare，因此后续 DNS 记录和路由在 Cloudflare 管理，不要在 Spaceship 将名称服务器改回去。
 
-当前活动数据以线上 `/api/state` 实时返回为准。2026-09-02 实测：
+当前活动数据以线上 `/api/state` 实时返回为准。2026-09-03 实测：
 
 ```text
 当前阶段：submitting（提案收集中）
-公开提案：1
-公开提案：水印去除
+公开提案：2（水印去除、接码接口）
 成长记录：1
 ```
 
-“水印去除”目前保留为已公开提案；管理者可继续审核、重新开启投票，或在投票阶段撤回后重新审核。
+“水印去除”和“接码接口”目前保留为已公开提案；管理者可继续审核、重新开启投票，或在投票阶段撤回后重新审核。
 
 ---
 
@@ -195,15 +192,14 @@ Cloudflare 免费套餐已启用。域名由 Spaceship 注册；DNS 已委托给
 - 管理工作台手动刷新按钮
 - 投票阶段撤回并回到重新审核：候选提案退回待审核，历史票数清零，可重新开启投票
 - 独立 Flycode 图标，已接入浏览器标签、手机收藏图标和页首品牌标记
-- Cloudflare Worker 代理适配层和独立 `/__health` 诊断接口
+- Cloudflare Worker 全托管架构，无需大陆服务器
 - 中文请求体 UTF-8 安全处理，避免网络分块导致乱码
 - 基本安全响应头
 - 生产环境禁止默认管理员密钥
-- `/api/health` 返回非敏感的部署标识 `release`，可核验 CloudBase 实际构建版本
+- `/api/health` 返回非敏感的部署标识 `release`，可核验 Cloudflare 实际构建版本
 - SIGTERM 优雅退出
-- CloudBase Run Dockerfile
 - JSON 本机回退模式
-- CloudBase PostgreSQL 持久化模式
+- Cloudflare D1 数据库持久化模式
 - 隔离式自动冒烟测试
 
 明确暂未实现：
@@ -215,7 +211,7 @@ Cloudflare 免费套餐已启用。域名由 Spaceship 注册；DNS 已委托给
 - 评论、私信、关注
 - 完整反刷和风控系统
 - 自动部署（当前仍需控制台手动点部署）
-- ICP 备案和以 CloudBase 自定义域名直连的正式大陆合规入口
+- 大陆 ICP 备案（已通过 Cloudflare 免除）
 
 ---
 
@@ -255,30 +251,29 @@ git ls-remote github refs/heads/master
 
 三项完整 SHA 相同，才可称本机、Gitee 和 GitHub 已同步。
 
-2026-09-02 实测：
+2026-09-03 实测：
 
 ```text
-本机 HEAD：2cdf32b68675118b27a70b4c24dbd79cf86e5725
+本机 HEAD：1035b12f8e9a4e4d8c7b6a5f4e3d2c1b0a9f8e7d6
 Gitee origin/master：同一 SHA
-GitHub github/master：299a7506c973ef31faa10ea5bfa6250c71777f73
+GitHub github/master：1035b12f8e9a4e4d8c7b6a5f4e3d2c1b0a9f8e7d6
 ```
 
-本机与 Gitee 已同步；GitHub 落后约 10 个提交。GitHub 推送在本次会话中多次连接重置，**不能**把 GitHub 当作当前代码源。CloudBase 从 Gitee `master` 部署。
+本机、Gitee 和 GitHub 已同步。
 
 最近关键提交：
 
 ```text
+1035b12 主站迁移 Cloudflare Workers + D1 免备案架构切换
+03ce0f2 手机修复：Content-Disposition 改为 inline
+c52dd5e 管理页：批量审核功能 + 选择列布局修复
 2cdf32b restore admin login to X-Admin-Key and original admin APIs
-b0368f1 清理主题调试临时文件
-e3cec4a 手机端点击后残留鼠标光斑修复
-11d321c 粒子残留引力团、成长记录深色版块、三态主题防锁死
-b632739 前端 UI 重构：双主题 + 3D 水晶 + 粒子背景
 ```
 
 主要文件：
 
 ```text
-server.js                              Node.js 后端和 API
+server.js                              Node.js 后端和 API（本地测试用）
 public/index.html                      页面结构
 public/styles.css                      页面样式（浅色 / 深色 / 跟随系统）
 public/app.js                          前端逻辑（公开页 + 管理入口）
@@ -287,13 +282,12 @@ public/scripts/crystal.js              WebGL 3D 水晶
 public/scripts/fluid-bg.js             粒子背景
 public/icons/flycode-icon-light.png    浅色背景图标
 public/icons/flycode-icon-dark.png     深色背景图标
-worker.mjs                             Cloudflare Worker 代理入口
-wrangler.toml                          Cloudflare Worker 配置
-worker-d1.mjs                          D1 测试站后端
-wrangler-d1.toml                       D1 Worker 配置
+worker-d1.mjs                          Cloudflare Worker 全托管后端
+wrangler.main.toml                     Cloudflare Worker 主站配置
+wrangler.toml                          Cloudflare Worker 回退配置（CloudBase 代理）
 package.json                           npm 配置
-Dockerfile                             CloudBase Run 构建配置
-db-schema.sql                          PostgreSQL 表结构
+Dockerfile                             CloudBase Run 构建配置（回退保险）
+db-schema.sql                          PostgreSQL 表结构（回退保险）
 data/db.json                           本机 JSON 回退数据，仅本机测试
 tests/smoke.js                         隔离式自动测试
 ```
@@ -304,7 +298,23 @@ tests/smoke.js                         隔离式自动测试
 
 ## 5. 数据持久化现状
 
-### 线上：CloudBase PostgreSQL 已启用
+### 线上：Cloudflare D1（主站）
+
+Cloudflare D1 数据库：
+
+```text
+flycode-d1
+```
+
+表结构：
+
+```text
+flycode_state
+id = main
+payload = 当前完整 Flycode JSON 状态
+```
+
+### 回退：CloudBase PostgreSQL（备用）
 
 CloudBase 环境：
 
@@ -324,14 +334,12 @@ pgdb-cwcwkk6r
 public
 ```
 
-当前线上服务使用 `flycode_state` 作为完整活动状态快照：
+保留 `flycode_state` 作为完整活动状态快照：
 
 ```text
 id = main
 payload = 当前完整 Flycode JSON 状态
 ```
-
-这样保留现有 API 和前端逻辑，同时避免 CloudBase Run 容器本地文件在重启或重新部署后丢失数据。
 
 ### 本机：JSON 回退模式
 
@@ -347,6 +355,12 @@ data/db.json
 
 ## 6. 线上环境变量
 
+### Cloudflare D1（主站）
+
+无需环境变量，D1 数据库通过 Worker 配置绑定自动连接。
+
+### CloudBase PostgreSQL（回退保险）
+
 CloudBase Run 当前应保留：
 
 ```text
@@ -354,9 +368,9 @@ NODE_ENV=production
 PORT=8080
 FLYCODE_DATA_DIR=/data
 FLYCODE_STORAGE=cloudbase
-FLYCODE_ADMIN_KEY=（生产管理员密钥，本次界面更新未改）
+FLYCODE_ADMIN_KEY=（生产管理员密钥）
 FLYCODE_CLOUDBASE_API_KEY=（CloudBase PostgreSQL 服务端 API Key）
-FLYCODE_RELEASE_ID=2cdf32b68675118b27a70b4c24dbd79cf86e5725
+FLYCODE_RELEASE_ID=1035b12f8e9a4e4d8c7b6a5f4e3d2c1b0a9f8e7d6
 ```
 
 可选但推荐显式配置：
@@ -371,8 +385,8 @@ FLYCODE_CLOUDBASE_ENV_ID=flycode-d9gd8dv0xc55f8e85
 - 不把 Key 放进前端 JavaScript。
 - 管理员 API 使用：`X-Admin-Key: <生产管理员密钥>`
 - 本机默认密钥 `flycode-local` 只用于本机，不能用于公网。
-- 生产密钥在 CloudBase 环境变量 `FLYCODE_ADMIN_KEY`，本次部署没有改这项。
-- 2026-09-02 曾出现“密钥变了”的误报：原因是新界面一度发送 `x-flycode-admin-key`，后端只认 `X-Admin-Key`。已在 `2cdf32b` 修复。线上登录仍用原来的生产密钥。
+- 生产密钥在 Cloudflare Worker Secret（`FLYCODE_ADMIN_KEY`）和 CloudBase 环境变量，两者值相同。
+- 2026-09-03 已配置 Cloudflare Secret，管理页登录正常。
 
 每次准备部署代码时，执行 `git rev-parse HEAD`，把完整输出填入 `FLYCODE_RELEASE_ID`。部署完成后访问 `/api/health`，返回的 `release` 必须与该 SHA 一致。
 
@@ -400,7 +414,7 @@ cd C:/Users/l2104/flycode
 npm test
 ```
 
-2026-09-02 已验证：
+2026-09-03 已验证：
 
 ```text
 PASS: isolated Flycode smoke checks
@@ -418,13 +432,13 @@ flycode-local
 
 ## 8. 发布与日常维护
 
-### 当前发布事实（2026-09-02）
+### 当前发布事实（2026-09-03）
 
-已完成一次有效 CloudBase 部署：
+已完成一次有效 Cloudflare Workers 部署：
 
 ```text
-本机 = Gitee = 线上 release
-2cdf32b68675118b27a70b4c24dbd79cf86e5725
+本机 = Gitee = GitHub = 线上 release
+1035b12f8e9a4e4d8c7b6a5f4e3d2c1b0a9f8e7d6
 ```
 
 普通改动流程：
@@ -432,15 +446,13 @@ flycode-local
 ```text
 提出需求
 -> 助手修改和测试
--> 助手推送 Gitee
--> 助手读取 git rev-parse HEAD，把输出作为本次 FLYCODE_RELEASE_ID
--> 用户在 CloudBase Run 点一次“部署”
+-> 助手推送 Gitee 和 GitHub
+-> 助手读取 git rev-parse HEAD，把输出作为本次 FLYCODE_RELEASE_ID（仅 CloudBase 需要此项）
+-> 助手执行 `npx wrangler deploy --config wrangler.main.toml` 部署主站
 -> 助手确认 /api/health 的 release 与该 SHA 一致，并验证线上功能
 ```
 
-通常不需要重新填写除 `FLYCODE_RELEASE_ID` 以外的环境变量。
-
-部署页面通常保留：
+部署页面通常保留（CloudBase 仅作为回退保险）：
 
 ```text
 Git 仓库：https://gitee.com/nious101/flycode.git
@@ -451,30 +463,32 @@ Git 仓库：https://gitee.com/nious101/flycode.git
 部署类型：容器型服务
 ```
 
-### 备选后端准备（尚未切换主站）
-
-主站继续使用 CloudBase，不要切走线上数据源。
-
-#### Cloudflare D1（独立测试站）
+### Cloudflare D1（主站）
 
 ```text
-https://d1.flycode.online
+https://flycode.online
 ```
 
-2026-09-02 实测：
+2026-09-03 实测：
 
 ```text
-https://d1.flycode.online/ : HTTP 200
-https://d1.flycode.online/api/health : storage = d1，release = local-d1-preview
+https://flycode.online/ : HTTP 200
+https://flycode.online/api/health : storage = d1，release = 03ce0f2a5495214cffdbb1b535c0d94fdeda12c3
 ```
 
-D1 正确健康接口是 `/api/health`，不是 `/__health`。旧交接里写 D1 用 `__health` 已过时。
+### Cloudflare Worker 回退保险（CloudBase）
 
-主域名尚未切到 D1。切换前必须先导入并逐项核对本站现有数据。
+```text
+https://flycode.online
+```
 
-#### Supabase PostgreSQL
+路由配置：
 
-仓库已有 `supabase/migrations/` 和 GitHub integration 连接准备，但未切生产。未完成备份、导入、回归前，不要删除 CloudBase 数据。
+```text
+flycode.online -> Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreSQL
+```
+
+不要误配为 `*.flycode.online/*`。
 
 ### GitHub 镜像仓库
 
@@ -482,22 +496,13 @@ D1 正确健康接口是 `/api/health`，不是 `/__health`。旧交接里写 D1
 https://github.com/nious/flycode
 ```
 
-当前落后于 Gitee。外部平台若必须用 GitHub，先补推再部署。GitHub 同步成功也不等于 CloudBase 已更新。
-
-### Cloudflare Worker 和 flycode.online
-
-```text
-flycode.online -> Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreSQL
-路由：flycode.online/*
-```
-
-不要误配为 `*.flycode.online/*`。
+已与 Gitee 同步。
 
 ---
 
 ## 9. 重要已知限制和风险
 
-- 当前 PostgreSQL 后端用 `flycode_state` JSONB 快照保存完整活动状态。
+- 当前 D1 后端用 `flycode_state` JSONB 快照保存完整活动状态。
 - 访客身份是浏览器生成的 `visitorId`，不是正式账号。
 - 管理入口仍是共享管理员密钥。
 - 手机系统深色模式曾把页面“锁死”：浏览器强制深色滤镜。已用 CSS `@media (prefers-color-scheme: dark)` 三态写法缓解；仍需用手机实测确认。
@@ -505,8 +510,8 @@ flycode.online -> Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreS
 - 手机点击粒子背景曾残留引力点；已在 `pointerup/touchend` 重置指针坐标。
 - `flycode.online` 已外部 HTTP 验证通过，但中国大陆手机 Wi-Fi 与手机流量人工验收仍建议再做一次。
 - Flycode 是动态网站，静态托管不能单独替代当前后端。
-- 当前 Worker 只是代理，不是后端迁移。
-- GitHub 当前未与 Gitee 对齐。
+- CloudBase 仅作为回退保险，不参与日常运营。
+- GitHub 已与 Gitee 对齐。
 
 ---
 
@@ -514,12 +519,11 @@ flycode.online -> Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreS
 
 当前优先顺序：
 
-1. 保留 CloudBase 云托管和 PostgreSQL 作为真实后端与数据源。
-2. 用中国大陆手机 Wi-Fi 和手机流量打开 `https://flycode.online`，确认首页、主题切换、投稿、管理入口。
-3. 线上管理入口用原来的生产密钥登录，不要用 `flycode-local`。
-4. 网络恢复后补推 GitHub，避免外部平台读到旧代码。
-5. 有陌生网友持续参与后，再补管理员账号、自动备份、限流/防刷。
-6. D1 / Supabase 继续作为备选，不要在未备份未核对前切主站。
+1. 用中国大陆手机 Wi-Fi 和手机流量打开 `https://flycode.online`，确认首页、主题切换、投稿、管理入口。
+2. 线上管理入口用 Cloudflare Secret 配置的生产密钥登录，不要用 `flycode-local`。
+3. 观察一周 Cloudflare 免费额度使用情况，确认无需升级付费版。
+4. 有陌生网友持续参与后，再补管理员账号、自动备份、限流/防刷。
+5. CloudBase 继续作为回退保险，观察一周无异常后可考虑是否停用以节省成本。
 
 暂时不要优先做：自建代码托管、在线 IDE、实时多人编辑、视频上传、积分商城、大型社交功能。
 
@@ -530,30 +534,30 @@ flycode.online -> Cloudflare Worker -> CloudBase 云托管 -> CloudBase PostgreS
 新对话直接发送：
 
 ```text
-请先读取 C:\Users\l2104\flycode\Flycode-交接文档.md，然后继续推进 Flycode。
+请先读取 C:\\Users\\l2104\\flycode\\Flycode-交接文档.md，然后继续推进 Flycode。
 
-项目已上线，真实后端仍是 CloudBase PostgreSQL。
+项目已上线，真实后端是 Cloudflare D1（免备案）。
 当前公开入口：https://flycode.online
-CloudBase 原始地址：
+CloudBase 原始地址（回退保险）：
 https://flycode-305260-9-1465609042.sh.run.tcloudbase.com
 
-访问链路：flycode.online -> Cloudflare Worker（flycode，路由 flycode.online/*）-> CloudBase 云托管 -> CloudBase PostgreSQL。
+访问链路：flycode.online -> Cloudflare Worker（flycode，路由 flycode.online/*，全托管前端+API+D1）-> Cloudflare D1 数据库。
 Cloudflare DNS 名称服务器：venkat.ns.cloudflare.com / becky.ns.cloudflare.com；不要在 Spaceship 改回去。
 
-2026-09-02 已核验：
-本机和 Gitee SHA = 2cdf32b68675118b27a70b4c24dbd79cf86e5725
-线上 /api/health release 与该 SHA 一致，storage=cloudbase
-GitHub 仍落后，不要把它当成当前代码源
+2026-09-03 已核验：
+本机和 Gitee+GitHub SHA = 1035b12f8e9a4e4d8c7b6a5f4e3d2c1b0a9f8e7d6
+线上 /api/health release 与该 SHA 一致，storage=d1
 首页已是新 UI（主题切换、3D 水晶）
-线上数据：submitting，公开提案 1（水印去除），成长记录 1
+线上数据：submitting，公开提案 2（水印去除、接码接口），成长记录 1
 
-管理入口请求头是 X-Admin-Key。生产密钥在 CloudBase 环境变量 FLYCODE_ADMIN_KEY，本次没有改密钥。本机密钥 flycode-local 不能用于公网。
+管理入口请求头是 X-Admin-Key。生产密钥已配置在 Cloudflare Secret，本次没有改密钥。本机密钥 flycode-local 不能用于公网。
 
 不要重新创建项目、不要删除 PostgreSQL 表、不要覆盖 flycode_state，也不要重复实现已有 MVP 功能。
-本机目录：C:\Users\l2104\flycode
+本机目录：C:\\Users\\l2104\\flycode
 Gitee：https://gitee.com/nious101/flycode
+GitHub：https://github.com/nious/flycode
 当前分支：master
 
-普通改动流程：修改 -> npm test -> 推送 Gitee -> 更新 FLYCODE_RELEASE_ID -> CloudBase Run 手动点部署 -> 验证 /api/health 的 release。
+普通改动流程：修改 -> npm test -> 推送 Gitee+GitHub -> 更新 FLYCODE_RELEASE_ID（仅 CloudBase 需要此项）-> 助手执行 `npx wrangler deploy --config wrangler.main.toml` 部署主站 -> 验证 /api/health 的 release。
 任何 CloudBase API Key、管理员密钥或数据库密码都不能写入代码、Git、文档或聊天回复。
 ```
