@@ -9,5 +9,6 @@ supabase/.temp/
 supabase/.branches/
 .wrangler/
 .import-main.sql
+Flycode-交接文档.md
 wrangler.main.toml
 wrangler.local-backup.toml
