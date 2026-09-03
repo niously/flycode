@@ -97,8 +97,19 @@
   document.documentElement.addEventListener('mouseleave', releasePointer);
 
   let time = 0;
+  let isAnimating = true;
+  
+  // Bug修复 #13: 页面不可见时暂停动画，节省电量
+  document.addEventListener('visibilitychange', () => {
+    isAnimating = !document.hidden;
+  });
+  
   function animate() {
     requestAnimationFrame(animate);
+    
+    // 页面不可见时跳过渲染
+    if (!isAnimating) return;
+    
     time += 0.015;
     
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';

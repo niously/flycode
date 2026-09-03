@@ -1,8 +1,12 @@
 const state = {
   public: null,
   admin: null,
-  adminKey: sessionStorage.getItem('flycode-admin-key') || '',
-  visitorId: localStorage.getItem('flycode-visitor-id') || createVisitorId()
+  adminKey: localStorage.getItem('flycode-admin-key') || '',
+  visitorId: localStorage.getItem('flycode-visitor-id') || createVisitorId(),
+  allProposals: [],
+  currentFilterTag: '',
+  openComments: new Set(),
+  commentsCache: new Map()
 };
 
 localStorage.setItem('flycode-visitor-id', state.visitorId);
@@ -21,6 +25,7 @@ const els = {
   statRounds: document.querySelector('#stat-rounds'),
   proposalCountLabel: document.querySelector('#proposal-count-label'),
   listModeLabel: document.querySelector('#list-mode-label'),
+  tagFilterBar: document.querySelector('#tag-filter-bar'),
   proposalList: document.querySelector('#proposal-list'),
   proposalEmpty: document.querySelector('#proposal-empty'),
   decisionSection: document.querySelector('#decision-section'),
@@ -75,6 +80,9 @@ const els = {
   phaseMessage: document.querySelector('#phase-message'),
   exportData: document.querySelector('#export-data'),
   adminLogout: document.querySelector('#admin-logout'),
+  communityOpen: document.querySelector('#community-open'),
+  communityModal: document.querySelector('#community-modal'),
+  communityClose: document.querySelector('#community-close'),
   toastStack: document.querySelector('#toast-stack')
 };
 
@@ -242,13 +250,99 @@ function renderPublic() {
   if (els.statParticipants) els.statParticipants.textContent = data.stats?.participantCount ?? 0;
   if (els.statRounds) els.statRounds.textContent = currentPhase.number || data.phases?.length || 1;
 
-  renderProposals(data.proposals || [], currentPhase.status, currentPhase);
+  state.allProposals = data.proposals || [];
+  filterProposals(state.currentFilterTag);
+  loadTagFilters();
+
   renderDecision(currentPhase, data.proposals || []);
   renderTimeline(data.updates || []);
 }
 
+function filterProposals(tag) {
+  const currentPhase = state.public?.currentPhase || {};
+  if (!tag) {
+    renderProposals(state.allProposals, currentPhase.status, currentPhase);
+  } else {
+    const filtered = state.allProposals.filter(p => p.tags && Array.isArray(p.tags) && p.tags.includes(tag));
+    renderProposals(filtered, currentPhase.status, currentPhase);
+  }
+}
+
+async function loadTagFilters() {
+  if (!els.tagFilterBar) return;
+  try {
+    const res = await api('/api/proposals/tags');
+    if (res.ok && Array.isArray(res.tags)) {
+      const activeTag = state.currentFilterTag;
+      const tagsHtml = res.tags.map(t => `
+        <button class="filter-tag ${activeTag === t.name ? 'active' : ''}" data-tag="${escapeHtml(t.name)}" type="button">
+          ${escapeHtml(t.name)}
+          <span class="tag-count">(${t.count})</span>
+        </button>
+      `).join('');
+
+      els.tagFilterBar.innerHTML = `
+        <button class="filter-tag ${!activeTag ? 'active' : ''}" data-tag="" type="button">全部</button>
+        ${tagsHtml}
+      `;
+
+      els.tagFilterBar.querySelectorAll('.filter-tag').forEach(btn => {
+        btn.addEventListener('click', handleTagFilter);
+      });
+    }
+  } catch (err) {
+    console.error('加载标签失败:', err);
+  }
+}
+
+function handleTagFilter(e) {
+  const btn = e.currentTarget;
+  const tag = btn.dataset.tag || '';
+  if (els.tagFilterBar) {
+    els.tagFilterBar.querySelectorAll('.filter-tag').forEach(b => b.classList.remove('active'));
+  }
+  btn.classList.add('active');
+  state.currentFilterTag = tag;
+  filterProposals(tag);
+}
+
+function getAvatarColor(str = '') {
+  const colors = ['#07c160', '#10aeff', '#fa9d3b', '#fa5151', '#7c3aed', '#db2777', '#f59e0b', '#6366f1'];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function spawnWxFloatHeart(x, y) {
+  const emojis = ['❤️', '💖', '✨', '👍', '🔥'];
+  const p = document.createElement('div');
+  p.className = 'wx-float-heart';
+  p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+  p.style.left = `${x}px`;
+  p.style.top = `${y}px`;
+  document.body.appendChild(p);
+  setTimeout(() => p.remove(), 900);
+}
+
 function renderProposals(proposals, phaseStatus, phase) {
   if (!els.proposalList) return;
+  
+  // 保存当前打开评论区的输入框状态
+  const inputStates = {};
+  els.proposalList.querySelectorAll('.wx-comment-section').forEach(section => {
+    const proposalId = section.dataset.sectionProposal;
+    const nameInput = section.querySelector('.wx-name-input');
+    const textInput = section.querySelector('.wx-text-input');
+    if (proposalId && (nameInput || textInput)) {
+      inputStates[proposalId] = {
+        name: nameInput?.value || '',
+        text: textInput?.value || '',
+        nameFocused: nameInput === document.activeElement,
+        textFocused: textInput === document.activeElement
+      };
+    }
+  });
+  
   const isVoting = phaseStatus === 'voting';
   if (els.proposalCountLabel) els.proposalCountLabel.textContent = `${proposals.length} 个公开提案`;
   if (els.listModeLabel) els.listModeLabel.textContent = isVoting ? '按投票热度排序' : '按最新提交排序';
@@ -262,6 +356,7 @@ function renderProposals(proposals, phaseStatus, phase) {
   if (els.proposalEmpty) els.proposalEmpty.hidden = true;
   const candidateIds = new Set(state.public?.voting?.candidateIds || phase?.candidates || []);
   const alreadyVoted = Boolean(state.public?.voting?.hasVoted);
+  
   els.proposalList.innerHTML = proposals.map((p, idx) => {
     const candidate = isVoting && candidateIds.has(p.id);
     const voteBtn = candidate
@@ -275,6 +370,58 @@ function renderProposals(proposals, phaseStatus, phase) {
 
     const linkHtml = p.link ? `<a class="proposal-link-pill" href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer">参考链接 ↗</a>` : '';
 
+    const tagsHtml = (p.tags && p.tags.length > 0)
+      ? `<div class="proposal-tags">${p.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>`
+      : '';
+
+    const isOpen = state.openComments.has(p.id);
+    const cachedComments = state.commentsCache.get(p.id) || [];
+
+    // 微信朋友圈评论气泡内容
+    let wxSectionHtml = '';
+    if (isOpen) {
+      const likesRow = (p.likeCount && p.likeCount > 0)
+        ? `<div class="wx-likes-row"><span class="wx-heart-mini">❤️</span> <span>${p.likeCount} 人觉得很赞</span></div>`
+        : '';
+
+      const commentsHtml = cachedComments.length > 0
+        ? cachedComments.map(c => {
+            const author = c.author || '匿名共创者';
+            const initial = author.slice(0, 1).toUpperCase();
+            const avatarBg = getAvatarColor(author);
+            const deleteBtn = state.adminKey 
+              ? `<button class="wx-delete-comment-btn" type="button" data-delete-comment="${escapeHtml(c.id)}" data-comment-proposal="${escapeHtml(p.id)}" title="删除评论">×</button>`
+              : '';
+            return `
+              <div class="wx-comment-item" data-comment-id="${escapeHtml(c.id)}">
+                <div class="wx-avatar" style="background:${avatarBg}">${escapeHtml(initial)}</div>
+                <div class="wx-comment-body">
+                  <span class="wx-comment-author">${escapeHtml(author)}:</span>
+                  <span class="wx-comment-text">${escapeHtml(c.content)}</span>
+                  <span class="wx-comment-time">${formatRelative(c.createdAt)}</span>
+                </div>
+                ${deleteBtn}
+              </div>
+            `;
+          }).join('')
+        : '<p style="color:var(--ink-muted);font-size:0.8rem;margin:0.25rem 0;">还没有评论，来抢沙发吧~</p>';
+
+      wxSectionHtml = `
+        <div class="wx-comment-section" data-section-proposal="${escapeHtml(p.id)}">
+          <div class="wx-bubble-arrow"></div>
+          ${likesRow}
+          <div class="wx-comments-list">${commentsHtml}</div>
+          <div class="wx-input-box">
+            <div class="wx-input-row">
+              <input class="field-input wx-name-input" type="text" placeholder="昵称" maxlength="20" value="${escapeHtml(localStorage.getItem('flycode-user-nickname') || '')}">
+              <textarea class="field-input wx-text-input" placeholder="评论..." maxlength="500" rows="1"></textarea>
+              <button class="wx-send-btn" type="button" data-send-comment="${escapeHtml(p.id)}">发送</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     return `<article class="proposal-card" data-card-id="${escapeHtml(p.id)}">
       <span class="proposal-index">${String(idx + 1).padStart(2, '0')}</span>
       <div class="proposal-body">
@@ -285,10 +432,112 @@ function renderProposals(proposals, phaseStatus, phase) {
           <span>${formatRelative(p.createdAt)}</span>
           ${linkHtml}
         </div>
+        <div class="proposal-actions">
+          <button class="wx-action-btn like-btn ${p.liked ? 'liked' : ''}" data-proposal-id="${escapeHtml(p.id)}" type="button" aria-label="点赞">
+            <svg class="like-icon" viewBox="0 0 24 24" width="15" height="15">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+            <span class="like-count">${p.likeCount || 0}</span>
+          </button>
+          <button class="wx-action-btn comment-btn ${isOpen ? 'active' : ''}" data-toggle-comment="${escapeHtml(p.id)}" type="button" aria-label="评论">
+            <svg class="comment-icon" viewBox="0 0 24 24" width="15" height="15">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+            </svg>
+            <span class="comment-count">${p.commentCount || 0}</span>
+          </button>
+          ${tagsHtml}
+        </div>
+        ${wxSectionHtml}
       </div>
       ${voteBtn}
     </article>`;
   }).join('');
+
+  els.proposalList.querySelectorAll('.like-btn').forEach(btn => {
+    btn.addEventListener('click', handleLikeClick);
+  });
+
+  els.proposalList.querySelectorAll('[data-toggle-comment]').forEach(btn => {
+    btn.addEventListener('click', handleToggleComment);
+  });
+
+  els.proposalList.querySelectorAll('[data-send-comment]').forEach(btn => {
+    btn.addEventListener('click', handleSendComment);
+  });
+
+  els.proposalList.querySelectorAll('.wx-name-input').forEach(nameInput => {
+    let isComposing = false;
+    
+    nameInput.addEventListener('compositionstart', () => {
+      isComposing = true;
+    });
+    
+    nameInput.addEventListener('compositionend', () => {
+      isComposing = false;
+      saveNickname();
+    });
+    
+    nameInput.addEventListener('input', () => {
+      if (!isComposing) {
+        saveNickname();
+      }
+    });
+    
+    function saveNickname() {
+      const val = nameInput.value.trim();
+      if (val) {
+        localStorage.setItem('flycode-user-nickname', val);
+      } else {
+        localStorage.removeItem('flycode-user-nickname');
+      }
+    }
+  });
+
+  els.proposalList.querySelectorAll('.wx-text-input').forEach(input => {
+    // Bug修复 #9: textarea自动扩展高度
+    function autoResize() {
+      input.style.height = 'auto';
+      input.style.height = input.scrollHeight + 'px';
+    }
+    
+    input.addEventListener('input', autoResize);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const btn = input.closest('.wx-input-box')?.querySelector('[data-send-comment]');
+        if (btn) btn.click();
+      }
+    });
+    
+    // 初始化高度
+    autoResize();
+  });
+
+  els.proposalList.querySelectorAll('[data-delete-comment]').forEach(deleteBtn => {
+    deleteBtn.addEventListener('click', handleDeleteComment);
+  });
+  
+  // Bug修复 #6: 渲染后恢复输入框的值和焦点
+  Object.keys(inputStates).forEach(proposalId => {
+    const section = els.proposalList.querySelector(`.wx-comment-section[data-section-proposal="${proposalId}"]`);
+    if (section) {
+      const nameInput = section.querySelector('.wx-name-input');
+      const textInput = section.querySelector('.wx-text-input');
+      if (nameInput && inputStates[proposalId].name) {
+        nameInput.value = inputStates[proposalId].name;
+      }
+      if (textInput && inputStates[proposalId].text) {
+        textInput.value = inputStates[proposalId].text;
+      }
+      // 恢复焦点和光标位置
+      if (inputStates[proposalId].nameFocused && nameInput) {
+        nameInput.focus();
+      }
+      if (inputStates[proposalId].textFocused && textInput) {
+        textInput.focus();
+      }
+    }
+  });
 }
 
 function renderDecision(phase, proposals) {
@@ -324,6 +573,190 @@ function renderTimeline(timeline) {
       </div>
     </article>
   `).join('');
+}
+
+async function handleLikeClick(event) {
+  const btn = event.currentTarget;
+  const proposalId = btn.dataset.proposalId;
+  if (!proposalId) return;
+
+  try {
+    btn.disabled = true;
+    const res = await api('/api/likes', {
+      method: 'POST',
+      body: JSON.stringify({ proposalId })
+    });
+
+    if (res.ok) {
+      if (res.action === 'liked') {
+        btn.classList.add('liked');
+        spawnWxFloatHeart(event.clientX, event.clientY);
+      } else {
+        btn.classList.remove('liked');
+      }
+
+      const countSpan = btn.querySelector('.like-count');
+      if (countSpan) countSpan.textContent = res.likeCount ?? 0;
+
+      // 更新本地缓存的提案数据
+      const cached = state.allProposals.find(p => p.id === proposalId);
+      if (cached) {
+        cached.liked = res.action === 'liked';
+        cached.likeCount = res.likeCount ?? 0;
+      }
+
+      // 如果当前评论区展开着，同步刷新点赞栏
+      const currentPhase = state.public?.currentPhase || {};
+      if (state.openComments.has(proposalId)) {
+        filterProposals(state.currentFilterTag);
+      }
+    } else {
+      showToast(res.error || '点赞失败', 'error');
+    }
+  } catch (err) {
+    console.error('点赞失败:', err);
+    showToast('网络错误，请稍后重试', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function handleToggleComment(event) {
+  const btn = event.currentTarget;
+  const proposalId = btn.dataset.toggleComment;
+  if (!proposalId) return;
+
+  if (state.openComments.has(proposalId)) {
+    state.openComments.delete(proposalId);
+    filterProposals(state.currentFilterTag);
+  } else {
+    state.openComments.add(proposalId);
+    // 先加载评论数据
+    try {
+      const res = await api(`/api/comments?proposalId=${encodeURIComponent(proposalId)}`);
+      if (res.ok) {
+        state.commentsCache.set(proposalId, res.comments || []);
+      }
+    } catch (err) {
+      console.error('加载评论失败:', err);
+    }
+    filterProposals(state.currentFilterTag);
+    // 聚焦输入框
+    setTimeout(() => {
+      const section = document.querySelector(`.wx-comment-section[data-section-proposal="${proposalId}"]`);
+      section?.querySelector('.wx-text-input')?.focus();
+    }, 50);
+  }
+}
+
+async function handleSendComment(event) {
+  const btn = event.currentTarget;
+  const proposalId = btn.dataset.sendComment;
+  if (!proposalId) return;
+
+  const inputBox = btn.closest('.wx-input-box');
+  const nameInput = inputBox?.querySelector('.wx-name-input');
+  const textInput = inputBox?.querySelector('.wx-text-input');
+
+  const author = nameInput?.value.trim() || '匿名共创者';
+  const content = textInput?.value.trim();
+
+  if (!content) {
+    showToast('请输入评论内容', 'error');
+    textInput?.focus();
+    return;
+  }
+
+  if (content.length > 500) {
+    showToast('评论内容不能超过 500 字', 'error');
+    return;
+  }
+
+  // 自动填充/更新上次输入的昵称（如果用户清空了，则清除保存的昵称）
+  if (nameInput) {
+    const val = nameInput.value.trim();
+    if (val) {
+      localStorage.setItem('flycode-user-nickname', val);
+    } else {
+      localStorage.removeItem('flycode-user-nickname');
+    }
+  }
+
+  btn.disabled = true;
+  try {
+    const res = await api('/api/comments', {
+      method: 'POST',
+      body: JSON.stringify({ proposalId, author, content })
+    });
+
+    if (res.ok) {
+      showToast('评论已发送！');
+      // Bug修复 #1: 清空输入框
+      if (textInput) {
+        textInput.value = '';
+        // Bug修复 #10: 重置textarea高度
+        textInput.style.height = 'auto';
+      }
+      // 重新拉取该提案评论并更新缓存
+      const commentRes = await api(`/api/comments?proposalId=${encodeURIComponent(proposalId)}`);
+      if (commentRes.ok) {
+        state.commentsCache.set(proposalId, commentRes.comments || []);
+      }
+      // 更新提案卡片评论计数
+      const cached = state.allProposals.find(p => p.id === proposalId);
+      if (cached) {
+        cached.commentCount = (cached.commentCount || 0) + 1;
+      }
+      filterProposals(state.currentFilterTag);
+      spawnWxFloatHeart(event.clientX, event.clientY);
+    } else {
+      showToast(res.error || '评论发送失败', 'error');
+    }
+  } catch (err) {
+    console.error('发送评论失败:', err);
+    showToast('网络错误，请稍后重试', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function handleDeleteComment(event) {
+  const btn = event.currentTarget;
+  const commentId = btn.dataset.deleteComment;
+  const proposalId = btn.dataset.commentProposal;
+  if (!commentId || !proposalId || !state.adminKey) return;
+
+  if (!confirm('确认删除这条评论？')) return;
+
+  btn.disabled = true;
+  try {
+    const res = await api(`/api/admin/comments/${commentId}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Key': state.adminKey }
+    });
+
+    if (res.ok) {
+      showToast('评论已删除');
+      // 重新拉取该提案评论并更新缓存
+      const commentRes = await api(`/api/comments?proposalId=${encodeURIComponent(proposalId)}`);
+      if (commentRes.ok) {
+        state.commentsCache.set(proposalId, commentRes.comments || []);
+      }
+      // 更新提案卡片评论计数
+      const cached = state.allProposals.find(p => p.id === proposalId);
+      if (cached && cached.commentCount > 0) {
+        cached.commentCount = cached.commentCount - 1;
+      }
+      filterProposals(state.currentFilterTag);
+    } else {
+      showToast(res.error || '删除失败', 'error');
+    }
+  } catch (err) {
+    console.error('删除评论失败:', err);
+    showToast('网络错误，请稍后重试', 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 els.proposalList?.addEventListener('click', async (e) => {
@@ -425,7 +858,7 @@ function reviewLocked() {
 function resetAdminSession(message, showFeedback) {
   state.admin = null;
   state.adminKey = '';
-  sessionStorage.removeItem('flycode-admin-key');
+  localStorage.removeItem('flycode-admin-key');
   selectedProposals.pending.clear();
   selectedProposals.rejected.clear();
   if (els.adminLoginView) els.adminLoginView.hidden = false;
@@ -521,6 +954,24 @@ function renderReviewList(container, proposals, type) {
           <button class="small-button danger" type="button" data-review-id="${escapeHtml(proposal.id)}" data-review-status="rejected">不采用</button>`;
       }
     }
+    const availableTags = ['功能', '内容', '设计', '体验', '技术', '运营', '其他'];
+    const currentTags = Array.isArray(proposal.tags) ? proposal.tags : [];
+    const tagOptions = availableTags.map(t => `
+      <label><input type="checkbox" value="${t}" ${currentTags.includes(t) ? 'checked' : ''}> ${t}</label>
+    `).join('');
+
+    const tagSelectorHtml = `
+      <div class="admin-tag-selector" data-proposal-id="${escapeHtml(proposal.id)}">
+        <label class="tag-label">标签分类（最多3个）：</label>
+        <div class="tag-checkboxes">
+          ${tagOptions}
+        </div>
+        <div>
+          <button class="small-button secondary" type="button" data-save-tags="${escapeHtml(proposal.id)}">保存标签</button>
+        </div>
+      </div>
+    `;
+
     return `
     <div class="admin-proposal-row review-proposal-row" data-row-id="${escapeHtml(proposal.id)}">
       ${selectable
@@ -533,6 +984,7 @@ function renderReviewList(container, proposals, type) {
         </div>
         <p class="proposal-desc">${escapeHtml(proposal.description)}</p>
         <p class="review-meta">${metaBits.join(' · ')}${linkHtml}</p>
+        ${tagSelectorHtml}
       </div>
       <div class="admin-row-actions">${actions}</div>
     </div>`;
@@ -648,6 +1100,57 @@ function renderPhaseActions(phase, data) {
 }
 
 document.addEventListener('click', async (e) => {
+  const saveTagsBtn = e.target.closest('[data-save-tags]');
+  if (saveTagsBtn) {
+    const proposalId = saveTagsBtn.dataset.saveTags;
+    const container = document.querySelector(`.admin-tag-selector[data-proposal-id="${proposalId}"]`);
+    if (!container) return;
+    const checkboxes = container.querySelectorAll('.tag-checkboxes input:checked');
+    const tags = Array.from(checkboxes).map(cb => cb.value);
+
+    if (tags.length > 3) {
+      showToast('最多只能选择 3 个标签', 'error');
+      return;
+    }
+
+    saveTagsBtn.disabled = true;
+    try {
+      const res = await api(`/api/admin/proposals/${encodeURIComponent(proposalId)}/tags`, {
+        method: 'PATCH',
+        headers: { 'X-Admin-Key': state.adminKey },
+        body: JSON.stringify({ tags })
+      });
+      if (res.ok) {
+        showToast('标签保存成功！');
+        await loadAdmin(false);
+        await loadPublic(false);
+      } else {
+        showToast(res.error || '保存失败', 'error');
+      }
+    } catch (err) {
+      console.error('保存标签失败:', err);
+      showToast('网络错误，请稍后重试', 'error');
+    } finally {
+      saveTagsBtn.disabled = false;
+    }
+    return;
+  }
+
+  // Bug修复 #5: 标签checkbox点击时限制最多3个
+  const tagCheckbox = e.target.closest('.tag-checkboxes input[type="checkbox"]');
+  if (tagCheckbox) {
+    const container = tagCheckbox.closest('.admin-tag-selector');
+    if (container) {
+      const checked = container.querySelectorAll('.tag-checkboxes input:checked');
+      const unchecked = container.querySelectorAll('.tag-checkboxes input:not(:checked)');
+      if (checked.length >= 3) {
+        unchecked.forEach(cb => cb.disabled = true);
+      } else {
+        unchecked.forEach(cb => cb.disabled = false);
+      }
+    }
+  }
+
   const deleteBtn = e.target.closest('[data-delete-id]');
   if (deleteBtn) {
     await runBatch('delete', deleteBtn.dataset.deleteType, [deleteBtn.dataset.deleteId]);
@@ -708,6 +1211,53 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+function openCommunity() {
+  if (!els.communityModal) return;
+  els.communityModal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  els.communityClose?.focus();
+}
+
+function closeCommunity() {
+  if (!els.communityModal) return;
+  els.communityModal.hidden = true;
+  document.body.style.overflow = '';
+}
+
+els.communityOpen?.addEventListener('click', openCommunity);
+els.communityClose?.addEventListener('click', closeCommunity);
+els.communityModal?.addEventListener('click', (e) => {
+  if (e.target === els.communityModal) closeCommunity();
+});
+
+document.addEventListener('click', async (e) => {
+  const copyButton = e.target.closest('[data-copy-group]');
+  if (!copyButton) return;
+  const number = copyButton.dataset.copyGroup;
+  if (!number) return;
+  const originalText = copyButton.textContent;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(number);
+    } else {
+      const input = document.createElement('textarea');
+      input.value = number;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+    copyButton.textContent = '已复制';
+    showToast('群号已复制。');
+    window.setTimeout(() => { copyButton.textContent = originalText; }, 1800);
+  } catch {
+    showToast(`复制失败，请手动输入：${number}`, 'error');
+  }
+});
+
 function openAdmin() {
   if (els.adminModal) els.adminModal.hidden = false;
   document.body.style.overflow = 'hidden';
@@ -730,9 +1280,11 @@ els.adminLoginForm?.addEventListener('submit', async (e) => {
   state.adminKey = key;
   const ok = await loadAdmin(true);
   if (ok) {
-    sessionStorage.setItem('flycode-admin-key', key);
+    localStorage.setItem('flycode-admin-key', key);
     setMessage(els.adminLoginMessage, '');
     showToast('已进入项目工作台。');
+    // Bug修复 #2: 登录后刷新提案列表，让删除按钮立即显示
+    filterProposals(state.currentFilterTag);
   } else {
     state.adminKey = '';
   }
@@ -745,7 +1297,9 @@ els.adminLogout?.addEventListener('click', () => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && els.adminModal && !els.adminModal.hidden) closeAdmin();
+  if (e.key !== 'Escape') return;
+  if (els.communityModal && !els.communityModal.hidden) closeCommunity();
+  if (els.adminModal && !els.adminModal.hidden) closeAdmin();
 });
 
 els.adminRefresh?.addEventListener('click', async () => {
@@ -900,7 +1454,43 @@ if (mainBoard) init3DTilt(mainBoard, 6);
 
 loadDraft();
 loadPublic();
-window.setInterval(() => loadPublic(false), 15000);
+// Bug修复 #4: 页面加载时如果localStorage有adminKey，自动尝试登录
+if (state.adminKey) {
+  loadAdmin(false);
+}
+
+// Bug修复 #7: 智能自动刷新 - 避免用户输入时刷新
+let lastInteractionTime = Date.now();
+
+// 监听用户交互，更新最后交互时间
+['input', 'focus', 'click'].forEach(eventType => {
+  document.addEventListener(eventType, (e) => {
+    if (e.target.classList.contains('wx-name-input') || 
+        e.target.classList.contains('wx-text-input')) {
+      lastInteractionTime = Date.now();
+    }
+  }, true);
+});
+
+window.setInterval(() => {
+  // 如果用户最近5秒内有交互，跳过刷新
+  const timeSinceLastInteraction = Date.now() - lastInteractionTime;
+  if (timeSinceLastInteraction < 5000) {
+    console.log('用户最近有交互，跳过自动刷新');
+    return;
+  }
+  
+  // 检查是否有焦点在输入框
+  const activeElement = document.activeElement;
+  const isTyping = activeElement && (
+    activeElement.classList.contains('wx-name-input') || 
+    activeElement.classList.contains('wx-text-input')
+  );
+  
+  if (!isTyping) {
+    loadPublic(false);
+  }
+}, 15000);
 
 document.addEventListener('click', (e) => {
   const trigger = e.target.closest('[data-scroll-to]');
@@ -912,3 +1502,44 @@ document.addEventListener('click', (e) => {
     targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 });
+
+// Bug修复 #8: 导航栏激活状态根据滚动位置动态更新
+function updateNavActiveState() {
+  const sections = [
+    { id: 'overview', link: document.querySelector('a[href="#overview"]') },
+    { id: 'participate', link: document.querySelector('a[href="#participate"]') },
+    { id: 'timeline', link: document.querySelector('a[href="#timeline"]') },
+    { id: 'community', link: document.querySelector('a[href="#community"]') }
+  ];
+  
+  let currentSection = 'overview';
+  const scrollPos = window.scrollY + 100;
+  
+  sections.forEach(section => {
+    const el = document.getElementById(section.id);
+    if (el && scrollPos >= el.offsetTop) {
+      currentSection = section.id;
+    }
+  });
+  
+  sections.forEach(section => {
+    if (section.link) {
+      if (section.id === currentSection) {
+        section.link.classList.add('active');
+      } else {
+        section.link.classList.remove('active');
+      }
+    }
+  });
+}
+
+// 监听滚动和导航点击
+window.addEventListener('scroll', updateNavActiveState);
+document.querySelectorAll('.nav-link[href^="#"]').forEach(link => {
+  link.addEventListener('click', () => {
+    setTimeout(updateNavActiveState, 100);
+  });
+});
+
+// 页面加载时初始化
+updateNavActiveState();

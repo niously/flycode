@@ -23,6 +23,7 @@ function validHttpUrl(value) {
 
 const phaseStatuses = new Set(['submitting', 'voting', 'execution', 'archived']);
 const proposalStatuses = new Set(['pending', 'approved', 'rejected']);
+const PROPOSAL_TAGS = ['功能', '内容', '设计', '体验', '技术', '运营', '其他'];
 
 function seedState() {
   return {
@@ -54,7 +55,9 @@ function seedState() {
       body: '网站还没有被完全定义。现在，第一轮决定权交给参与者：你希望 Flycode 先变成什么？',
       createdAt: now()
     }],
-    votes: {}
+    votes: {},
+    likes: {},
+    comments: []
   };
 }
 
@@ -64,7 +67,10 @@ function normalizeState(state) {
   state.proposals = Array.isArray(state.proposals) ? state.proposals : [];
   state.updates = Array.isArray(state.updates) ? state.updates : [];
   state.votes ||= {};
+  state.likes ||= {};
+  state.comments = Array.isArray(state.comments) ? state.comments : [];
   for (const phase of state.phases) phase.candidates = Array.isArray(phase.candidates) ? phase.candidates : [];
+  for (const proposal of state.proposals) proposal.tags = Array.isArray(proposal.tags) ? proposal.tags : [];
   return state;
 }
 
@@ -86,13 +92,32 @@ function voteCount(state, proposalId) {
   return Object.values(state.votes).reduce((total, votes) => total + Object.values(votes || {}).filter((vote) => vote.proposalId === proposalId).length, 0);
 }
 
+function likeCount(state, proposalId) {
+  return Object.values(state.likes || {}).reduce((total, likedIds) => total + (Array.isArray(likedIds) && likedIds.includes(proposalId) ? 1 : 0), 0);
+}
+
+function commentCount(state, proposalId) {
+  return (state.comments || []).filter((c) => c.proposalId === proposalId).length;
+}
+
 function withVoteCount(state, proposal) {
   return { ...proposal, voteCount: voteCount(state, proposal.id) };
 }
 
+function withEngagementData(state, proposal, visitorId = '') {
+  return {
+    ...proposal,
+    voteCount: voteCount(state, proposal.id),
+    likeCount: likeCount(state, proposal.id),
+    liked: visitorId && Array.isArray(state.likes?.[visitorId]) ? state.likes[visitorId].includes(proposal.id) : false,
+    commentCount: commentCount(state, proposal.id),
+    tags: Array.isArray(proposal.tags) ? proposal.tags : []
+  };
+}
+
 function publicState(state, visitorId = '') {
   const phase = currentPhase(state);
-  const candidates = candidateProposals(state, phase).map((proposal) => withVoteCount(state, proposal));
+  const candidates = candidateProposals(state, phase).map((proposal) => withEngagementData(state, proposal, visitorId));
   const candidateIds = candidates.map((proposal) => proposal.id);
   const responsePhase = phase ? { ...phase, candidates: candidateIds } : null;
   return {
@@ -101,7 +126,7 @@ function publicState(state, visitorId = '') {
     currentPhase: responsePhase,
     proposals: state.proposals
       .filter((proposal) => proposal.status === 'approved' && proposal.phaseId === phase?.id)
-      .map((proposal) => withVoteCount(state, proposal))
+      .map((proposal) => withEngagementData(state, proposal, visitorId))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     candidateProposals: candidates,
     voting: {
@@ -124,9 +149,9 @@ function adminState(state) {
   return {
     ...publicState(state),
     allProposals: state.proposals
-      .map((proposal) => withVoteCount(state, proposal))
+      .map((proposal) => withEngagementData(state, proposal))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-    decisionCandidates: candidates.map((proposal) => withVoteCount(state, proposal)),
+    decisionCandidates: candidates.map((proposal) => withEngagementData(state, proposal)),
     votes: state.votes,
     currentPhase: phase ? { ...phase, candidates: candidates.map((proposal) => proposal.id) } : null
   };
@@ -215,7 +240,56 @@ async function api(request, env, url) {
     });
   }
 
-  if (request.method !== 'POST') return json({ error: '找不到接口。' }, 404);
+  if (request.method === 'GET' && url.pathname === '/api/comments') {
+    const proposalId = cleanText(url.searchParams.get('proposalId'), 100);
+    if (!proposalId) return json({ error: '缺少提案标识。' }, 400);
+    const state = await readState(env);
+    const proposal = state.proposals.find((p) => p.id === proposalId);
+    if (!proposal) return json({ error: '提案不存在。' }, 404);
+    const comments = state.comments
+      .filter((c) => c.proposalId === proposalId)
+      .map(({ id, author, content, createdAt }) => ({ id, author, content, createdAt }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return json({ ok: true, comments });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/api/proposals/tags') {
+    const state = await readState(env);
+    const tagCounts = {};
+    state.proposals
+      .filter((p) => p.status === 'approved')
+      .forEach((p) => {
+        if (Array.isArray(p.tags)) {
+          p.tags.forEach((tag) => {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+          });
+        }
+      });
+    const tags = Object.entries(tagCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+    return json({ ok: true, tags });
+  }
+
+  if (request.method === 'DELETE' && url.pathname.startsWith('/api/admin/comments/')) {
+    if (!isAdmin(request, env)) return json({ error: '需要管理员权限。' }, 401);
+    const pathParts = url.pathname.split('/');
+    const commentId = pathParts[4];
+    if (!commentId) return json({ error: '缺少评论标识。' }, 400);
+    try {
+      const result = await mutateState(env, (db) => {
+        const index = db.comments.findIndex((c) => c.id === commentId);
+        if (index === -1) throw new Error('评论不存在。');
+        db.comments.splice(index, 1);
+        return { ok: true };
+      });
+      return json(result);
+    } catch (error) {
+      return json({ error: error.message }, 400);
+    }
+  }
+
+  if (request.method !== 'POST' && request.method !== 'PATCH') return json({ error: '找不到接口。' }, 404);
 
   let body;
   try {
@@ -224,7 +298,7 @@ async function api(request, env, url) {
     return json({ error: error.message }, 400);
   }
 
-  if (url.pathname === '/api/proposals') {
+  if (request.method === 'POST' && url.pathname === '/api/proposals') {
     const title = cleanText(body.title, 80);
     const description = cleanText(body.description, 1200);
     const author = cleanText(body.author, 30) || '匿名参与者';
@@ -237,7 +311,7 @@ async function api(request, env, url) {
       const state = await mutateState(env, (db) => {
         const phase = currentPhase(db);
         if (!phase || phase.status !== 'submitting') throw new Error('当前阶段暂未开放提案。');
-        db.proposals.push({ id: makeId('proposal'), phaseId: phase.id, title, description, author, link, status: 'pending', createdAt: now(), reviewedAt: null });
+        db.proposals.push({ id: makeId('proposal'), phaseId: phase.id, title, description, author, link, status: 'pending', tags: [], createdAt: now(), reviewedAt: null });
         return publicState(db, cleanText(request.headers.get('x-visitor-id'), 120));
       });
       return json(state, 201);
@@ -246,9 +320,59 @@ async function api(request, env, url) {
     }
   }
 
+  if (request.method === 'POST' && url.pathname === '/api/likes') {
+    const proposalId = cleanText(body.proposalId, 100);
+    const visitorId = cleanText(request.headers.get('x-visitor-id'), 120);
+    if (!proposalId) return json({ error: '缺少提案标识。' }, 400);
+    if (!visitorId) return json({ error: '缺少访客标识。' }, 400);
+    try {
+      const result = await mutateState(env, (db) => {
+        const proposal = db.proposals.find((p) => p.id === proposalId);
+        if (!proposal) throw new Error('提案不存在。');
+        db.likes[visitorId] = Array.isArray(db.likes[visitorId]) ? db.likes[visitorId] : [];
+        const index = db.likes[visitorId].indexOf(proposalId);
+        let action;
+        if (index > -1) {
+          db.likes[visitorId].splice(index, 1);
+          action = 'unliked';
+        } else {
+          db.likes[visitorId].push(proposalId);
+          action = 'liked';
+        }
+        return { ok: true, action, likeCount: likeCount(db, proposalId) };
+      });
+      return json(result);
+    } catch (error) {
+      return json({ error: error.message }, 400);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/comments') {
+    const proposalId = cleanText(body.proposalId, 100);
+    const content = cleanText(body.content, 500);
+    const author = cleanText(body.author, 20) || '匿名参与者';
+    const visitorId = cleanText(request.headers.get('x-visitor-id'), 120);
+    if (!proposalId) return json({ error: '缺少提案标识。' }, 400);
+    if (!visitorId) return json({ error: '缺少访客标识。' }, 400);
+    if (content.length < 1) return json({ error: '评论内容不能为空。' }, 400);
+    if (content.length > 500) return json({ error: '评论内容不能超过 500 字。' }, 400);
+    try {
+      const result = await mutateState(env, (db) => {
+        const proposal = db.proposals.find((p) => p.id === proposalId);
+        if (!proposal) throw new Error('提案不存在。');
+        const comment = { id: makeId('comment'), proposalId, visitorId, author, content, createdAt: now() };
+        db.comments.push(comment);
+        return { ok: true, comment: { id: comment.id, proposalId: comment.proposalId, author: comment.author, content: comment.content, createdAt: comment.createdAt } };
+      });
+      return json(result);
+    } catch (error) {
+      return json({ error: error.message }, 400);
+    }
+  }
+
   if (!isAdmin(request, env) && url.pathname.startsWith('/api/admin/')) return json({ error: '需要管理员权限。' }, 401);
 
-  if (url.pathname === '/api/votes') {
+  if (request.method === 'POST' && url.pathname === '/api/votes') {
     const proposalId = cleanText(body.proposalId, 100);
     const visitorId = cleanText(body.visitorId, 120);
     if (!proposalId || !visitorId) return json({ error: '缺少投票信息。' }, 400);
@@ -269,7 +393,27 @@ async function api(request, env, url) {
     }
   }
 
-  if (url.pathname === '/api/admin/proposals/batch') {
+  if (request.method === 'PATCH' && url.pathname.startsWith('/api/admin/proposals/') && url.pathname.endsWith('/tags')) {
+    const pathParts = url.pathname.split('/');
+    const proposalId = pathParts[4];
+    const tags = Array.isArray(body.tags) ? body.tags.map((t) => cleanText(t, 20)).filter(Boolean) : [];
+    if (!proposalId) return json({ error: '缺少提案标识。' }, 400);
+    if (tags.length > 3) return json({ error: '最多只能设置 3 个标签。' }, 400);
+    if (tags.some((t) => !PROPOSAL_TAGS.includes(t))) return json({ error: '包含无效标签。' }, 400);
+    try {
+      const result = await mutateState(env, (db) => {
+        const proposal = db.proposals.find((p) => p.id === proposalId);
+        if (!proposal) throw new Error('提案不存在。');
+        proposal.tags = tags;
+        return { ok: true, proposal: withEngagementData(db, proposal) };
+      });
+      return json(result);
+    } catch (error) {
+      return json({ error: error.message }, 400);
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/admin/proposals/batch') {
     const ids = Array.isArray(body.ids) ? body.ids.map((id) => cleanText(id, 100)).filter(Boolean) : [];
     const action = cleanText(body.action, 20);
     const allowedActions = new Set(['approve', 'reject', 'rereview', 'delete']);
@@ -300,7 +444,7 @@ async function api(request, env, url) {
     }
   }
 
-  if (url.pathname === '/api/admin/proposals/review') {
+  if (request.method === 'POST' && url.pathname === '/api/admin/proposals/review') {
     const proposalId = cleanText(body.proposalId, 100);
     const status = cleanText(body.status, 20);
     if (!proposalStatuses.has(status)) return json({ error: '无效的提案状态。' }, 400);
@@ -320,7 +464,7 @@ async function api(request, env, url) {
     }
   }
 
-  if (url.pathname === '/api/admin/phase/withdraw-voting') {
+  if (request.method === 'POST' && url.pathname === '/api/admin/phase/withdraw-voting') {
     try {
       const state = await mutateState(env, (db) => {
         const phase = currentPhase(db);
@@ -345,7 +489,7 @@ async function api(request, env, url) {
     }
   }
 
-  if (url.pathname === '/api/admin/phase/status') {
+  if (request.method === 'POST' && url.pathname === '/api/admin/phase/status') {
     const status = cleanText(body.status, 20);
     if (!phaseStatuses.has(status)) return json({ error: '无效的阶段状态。' }, 400);
     try {
@@ -369,7 +513,7 @@ async function api(request, env, url) {
     }
   }
 
-  if (url.pathname === '/api/admin/decision') {
+  if (request.method === 'POST' && url.pathname === '/api/admin/decision') {
     const proposalId = cleanText(body.proposalId, 100);
     const note = cleanText(body.note, 800);
     try {
@@ -391,7 +535,7 @@ async function api(request, env, url) {
     }
   }
 
-  if (url.pathname === '/api/admin/updates') {
+  if (request.method === 'POST' && url.pathname === '/api/admin/updates') {
     const title = cleanText(body.title, 100);
     const content = cleanText(body.body, 1200);
     if (title.length < 2 || content.length < 5) return json({ error: '请填写更新标题和内容。' }, 400);
@@ -406,7 +550,7 @@ async function api(request, env, url) {
     }
   }
 
-  if (url.pathname === '/api/admin/phases') {
+  if (request.method === 'POST' && url.pathname === '/api/admin/phases') {
     const title = cleanText(body.title, 100);
     const question = cleanText(body.question, 500);
     const deadline = cleanText(body.deadline, 30) || null;

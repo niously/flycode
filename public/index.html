@@ -42,7 +42,7 @@
     })();
   </script>
   
-  <link rel="stylesheet" href="/styles.css?v=20260902-06">
+  <link rel="stylesheet" href="/styles.css?v=20260903-09">
 </head>
 <body>
   <!-- 动态流光背景与极光层 -->
@@ -72,6 +72,13 @@
           <a class="nav-link active" href="#overview">项目</a>
           <a class="nav-link" href="#participate">参与</a>
           <a class="nav-link" href="#timeline">成长记录</a>
+          <button class="nav-link nav-button" id="community-open" type="button" aria-haspopup="dialog">交流</button>
+          <button class="nav-link nav-button" id="qq-group-open" type="button" aria-haspopup="dialog">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-right:4px;">
+              <path fill="currentColor" d="M21.395 15.035a39.548 39.548 0 0 0-.803-2.264l-1.079-2.695c.001-.032.014-.562.014-.836C19.526 4.632 17.351 0 12 0S4.474 4.632 4.474 9.241c0 .274.013.804.014.836l-1.08 2.695a38.97 38.97 0 0 0-.802 2.264c-1.021 3.283-.69 4.643-.438 4.673.54.065 2.103-2.472 2.103-2.472 0 1.469.756 3.387 2.394 4.771-.612.188-1.363.479-1.845.835-.434.32-.379.646-.301.778.343.578 5.883.369 7.482.369s7.138.209 7.482-.369c.078-.132.132-.458-.301-.778-.482-.356-1.233-.646-1.846-.836 1.637-1.384 2.393-3.302 2.393-4.771 0 0 1.563 2.537 2.103 2.472.251-.03.581-1.39-.438-4.673z"/>
+            </svg>
+            讨论群
+          </button>
         </nav>
         <div class="topbar-actions">
           <button class="theme-toggle-btn" id="theme-toggle" type="button" aria-label="切换浅色/深色主题" title="切换主题">
@@ -162,6 +169,10 @@
             <span class="toolbar-divider"></span>
             <span id="list-mode-label">按最新提交排序</span>
           </div>
+          <!-- 标签筛选栏 -->
+          <div class="tag-filter-bar" id="tag-filter-bar">
+            <button class="filter-tag active" data-tag="" type="button">全部</button>
+          </div>
           <div class="proposal-list" id="proposal-list" aria-live="polite"></div>
           <div class="empty-state" id="proposal-empty" hidden>
             <span class="empty-number">01</span>
@@ -231,6 +242,45 @@
         <div class="timeline-list" id="timeline-list"></div>
       </section>
 
+      <section class="community-section" id="community">
+        <div class="community-heading">
+          <div>
+            <p class="section-index">05 / 联系和交流</p>
+            <h2>找到适合你的交流方式</h2>
+          </div>
+          <p class="section-explanation">无论你是想认真参与项目，还是想随时了解新动态，都可以找到一个轻松加入的入口。</p>
+        </div>
+        <div class="community-grid">
+          <article class="community-card community-card-qq">
+            <div class="community-card-top">
+              <span class="community-icon" aria-hidden="true">Q</span>
+              <span class="community-channel">项目讨论</span>
+            </div>
+            <h3>QQ群</h3>
+            <p>适合提交想法、讨论功能、反馈体验，也方便参与每一轮共创。</p>
+            <div class="community-number-row">
+              <span>群号</span>
+              <strong>1092958736</strong>
+              <button class="community-copy-button" type="button" data-copy-group="1092958736" aria-label="复制QQ群号">复制</button>
+            </div>
+          </article>
+          <article class="community-card community-card-douyin">
+            <div class="community-card-top">
+              <span class="community-icon" aria-hidden="true">抖</span>
+              <span class="community-channel">动态交流</span>
+            </div>
+            <h3>抖音群</h3>
+            <p>适合关注短视频动态、随手交流和认识同样关心 Flycode 的朋友。</p>
+            <div class="community-number-row">
+              <span>群号</span>
+              <strong>622856899407</strong>
+              <button class="community-copy-button" type="button" data-copy-group="622856899407" aria-label="复制抖音群号">复制</button>
+            </div>
+          </article>
+        </div>
+        <p class="community-note">复制群号后，在对应平台搜索并加入即可。</p>
+      </section>
+
       <section class="closing-section">
         <div class="closing-number">01</div>
         <div class="closing-copy">
@@ -252,6 +302,30 @@
     </footer>
   </div>
 
+  <div class="modal-backdrop community-modal-backdrop" id="community-modal" hidden>
+    <section class="community-modal" role="dialog" aria-modal="true" aria-labelledby="community-title">
+      <div class="modal-header">
+        <div><p class="section-index">05 / 联系和交流</p><h2 id="community-title">找到适合你的交流方式</h2></div>
+        <button class="icon-button" id="community-close" type="button" aria-label="关闭交流窗口" title="关闭">×</button>
+      </div>
+      <p class="modal-intro">无论你是想认真参与项目，还是想随时了解新动态，都可以找到一个轻松加入的入口。</p>
+      <div class="community-grid">
+        <article class="community-card community-card-qq">
+          <div class="community-card-top"><span class="community-icon" aria-hidden="true">Q</span><span class="community-channel">项目讨论</span></div>
+          <h3>QQ群</h3>
+          <p>适合提交想法、讨论功能、反馈体验，也方便参与每一轮共创。</p>
+          <div class="community-number-row"><span>群号</span><strong>1092958736</strong><button class="community-copy-button" type="button" data-copy-group="1092958736" aria-label="复制QQ群号">复制</button></div>
+        </article>
+        <article class="community-card community-card-douyin">
+          <div class="community-card-top"><span class="community-icon" aria-hidden="true">抖</span><span class="community-channel">动态交流</span></div>
+          <h3>抖音群</h3>
+          <p>适合关注短视频动态、随手交流和认识同样关心 Flycode 的朋友。</p>
+          <div class="community-number-row"><span>群号</span><strong>622856899407</strong><button class="community-copy-button" type="button" data-copy-group="622856899407" aria-label="复制抖音群号">复制</button></div>
+        </article>
+      </div>
+      <p class="community-note">复制群号后，在对应平台搜索并加入即可。</p>
+    </section>
+  </div>
   <div class="modal-backdrop" id="admin-modal" hidden>
     <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-title">
       <div class="modal-header">
@@ -342,10 +416,13 @@
     </section>
   </div>
 
-  <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
-  <script src="/scripts/theme.js?v=20260902-03"></script>
+
+  <!-- Toast 提示容器 -->
+  <div id="toast-stack"></div>
+
+  <script src="/scripts/theme.js?v=20260903-04"></script>
   <script src="/scripts/fluid-bg.js?v=20260902-03" defer></script>
   <script src="/scripts/crystal.js?v=20260902-01" defer></script>
-  <script src="/app.js?v=20260902-06" defer></script>
+  <script src="/app.js?v=20260903-09" defer></script>
 </body>
 </html>

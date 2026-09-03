@@ -15,7 +15,11 @@
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
   renderer.setSize(width, height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  
+  // Bug修复 #13: 手机端性能优化 - 降低像素比和抗锯齿
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+  renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
+  
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.6;
 
@@ -146,22 +150,36 @@
   });
 
   let time = 0;
+  let isAnimating = true;
+  
+  // Bug修复 #13: 页面不可见时暂停动画，节省电量和GPU
+  document.addEventListener('visibilitychange', () => {
+    isAnimating = !document.hidden;
+  });
+  
   function animate() {
     requestAnimationFrame(animate);
+    
+    // 页面不可见时跳过渲染
+    if (!isAnimating) return;
+    
     time += 0.02;
 
-    // 高光光源环绕公转 (制造极致的切面流光与反光闪烁)
-    pointLight1.position.x = Math.sin(time) * 3.2;
-    pointLight1.position.z = Math.cos(time) * 3.2;
-    pointLight1.position.y = Math.cos(time * 0.7) * 2;
+    // Bug修复 #13: 手机端性能优化 - 降低光源计算频率
+    if (!isMobile || time % 2 < 1) {
+      // 高光光源环绕公转 (制造极致的切面流光与反光闪烁)
+      pointLight1.position.x = Math.sin(time) * 3.2;
+      pointLight1.position.z = Math.cos(time) * 3.2;
+      pointLight1.position.y = Math.cos(time * 0.7) * 2;
 
-    pointLight2.position.x = -Math.sin(time * 0.8) * 3.2;
-    pointLight2.position.z = -Math.cos(time * 0.8) * 3.2;
-    pointLight2.position.y = Math.sin(time * 0.5) * 2;
+      pointLight2.position.x = -Math.sin(time * 0.8) * 3.2;
+      pointLight2.position.z = -Math.cos(time * 0.8) * 3.2;
+      pointLight2.position.y = Math.sin(time * 0.5) * 2;
 
-    pointLight3.position.x = Math.cos(time * 1.2) * 2.8;
-    pointLight3.position.y = Math.sin(time * 1.2) * 2.8;
-    pointLight3.position.z = 2.8;
+      pointLight3.position.x = Math.cos(time * 1.2) * 2.8;
+      pointLight3.position.y = Math.sin(time * 1.2) * 2.8;
+      pointLight3.position.z = 2.8;
+    }
 
     // 优雅舒缓自转并带有物理惯性
     if (!isDragging) {

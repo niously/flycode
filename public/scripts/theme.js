@@ -64,7 +64,7 @@
     const stack = document.querySelector('#toast-stack');
     if (!stack) return;
     const el = document.createElement('div');
-    el.className = 'toast';
+    el.className = 'theme-toast';
     el.textContent = msg;
     stack.appendChild(el);
     setTimeout(() => el.remove(), 1600);
@@ -111,7 +111,8 @@
   function bindButton() {
     const btn = document.querySelector('#theme-toggle');
     if (!btn) return;
-    btn.onclick = handleToggle;
+    // 使用 addEventListener 捕获阶段，优先级最高
+    btn.addEventListener('click', handleToggle, true);
   }
 
   if (document.readyState === 'loading') {
